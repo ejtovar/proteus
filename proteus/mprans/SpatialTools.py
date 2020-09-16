@@ -2080,7 +2080,8 @@ def assembleAuxiliaryVariables(domain):
         'twp': [],
         'vof': [],
         'thp': [],
-        'vos': []
+        'vos': [],
+        'SWFlow_relax': []
     }
 
     zones_global = {}
@@ -2125,6 +2126,8 @@ def assembleAuxiliaryVariables(domain):
         if 'RelaxZones' in list(shape.auxiliaryVariables.keys()):
             if not zones_global:
                 aux['twp'] += [bc.RelaxationZoneWaveGenerator(zones_global,
+                                                              domain.nd)]
+                aux['SWFlow_relax'] += [bc.RelaxationZoneWaveGenerator(zones_global,
                                                               domain.nd)]
             if not hasattr(domain, 'porosityTypes'):
                 # create arrays of default values

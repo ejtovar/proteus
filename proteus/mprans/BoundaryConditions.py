@@ -81,20 +81,20 @@ class BC_RANS(BoundaryConditions.BC_Base):
         self.vs_dirichlet = BoundaryCondition()  # sediment velocity v
         self.ws_dirichlet = BoundaryCondition()  # sediment velocity w
         self.vos_dirichlet = BoundaryCondition()  # VOS
-        self.us_advective = BoundaryCondition()  
-        self.vs_advective = BoundaryCondition()  
-        self.ws_advective = BoundaryCondition()  
-        self.vos_advective = BoundaryCondition() 
-        self.us_diffusive = BoundaryCondition()   
-        self.vs_diffusive = BoundaryCondition()  
-        self.ws_diffusive = BoundaryCondition() 
+        self.us_advective = BoundaryCondition()
+        self.vs_advective = BoundaryCondition()
+        self.ws_advective = BoundaryCondition()
+        self.vos_advective = BoundaryCondition()
+        self.us_diffusive = BoundaryCondition()
+        self.vs_diffusive = BoundaryCondition()
+        self.ws_diffusive = BoundaryCondition()
         # projection scheme
         self.pInit_dirichlet = BoundaryCondition() # initial pressure
         self.pInc_dirichlet = BoundaryCondition() # pressure increment
-        self.pInit_advective = BoundaryCondition() 
-        self.pInc_advective = BoundaryCondition() 
-        self.pInit_diffusive = BoundaryCondition() 
-        self.pInc_diffusive = BoundaryCondition() 
+        self.pInit_advective = BoundaryCondition()
+        self.pInc_advective = BoundaryCondition()
+        self.pInit_diffusive = BoundaryCondition()
+        self.pInc_diffusive = BoundaryCondition()
         # clsvof
         self.clsvof_dirichlet = BoundaryCondition()
         self.clsvof_advective = BoundaryCondition()
@@ -213,19 +213,19 @@ class BC_RANS(BoundaryConditions.BC_Base):
         self.w_dirichlet.setConstantBC(0.)
         self.us_dirichlet.setConstantBC(0.)
         self.vs_dirichlet.setConstantBC(0.)
-        self.ws_dirichlet.setConstantBC(0.)  
+        self.ws_dirichlet.setConstantBC(0.)
         self.k_dirichlet.setConstantBC(1e-20)
-        self.dissipation_dirichlet.setConstantBC(1e-10) 
+        self.dissipation_dirichlet.setConstantBC(1e-10)
         # advective
         self.p_advective.setConstantBC(0.)
         self.pInit_advective.setConstantBC(0.)
-        self.pInc_advective.setConstantBC(0.)  
+        self.pInc_advective.setConstantBC(0.)
         self.vof_advective.setConstantBC(0.)
         self.vos_advective.setConstantBC(0.)
         # diffusive
         self.pInc_diffusive.setConstantBC(0.)
         self.k_diffusive.setConstantBC(0.)
-        self.dissipation_diffusive.setConstantBC(0.)  
+        self.dissipation_diffusive.setConstantBC(0.)
 
     def setFreeSlip(self):
         """
@@ -235,8 +235,8 @@ class BC_RANS(BoundaryConditions.BC_Base):
         self.BC_type = 'FreeSlip'
         # dirichlet
         self.k_dirichlet.setConstantBC(1e-20)
-        self.dissipation_dirichlet.setConstantBC(1e-10) 
-        # advective        
+        self.dissipation_dirichlet.setConstantBC(1e-10)
+        # advective
         self.p_advective.setConstantBC(0.)
         self.pInit_advective.setConstantBC(0.)
         self.pInc_advective.setConstantBC(0.)
@@ -258,7 +258,7 @@ class BC_RANS(BoundaryConditions.BC_Base):
         self.pInc_diffusive.setConstantBC(0.)
         self.k_diffusive.setConstantBC(0.)
         self.dissipation_diffusive.setConstantBC(0.)
-        
+
     def setConstantInletVelocity(self, U, ramp, kk, dd , b_or):
         """
         Sets constant velocity in each inlet face with ramping up and turbulence properties
@@ -269,16 +269,16 @@ class BC_RANS(BoundaryConditions.BC_Base):
         uu = U[0]
         vv = U[1]
         ww = U[2]
-        
+
         # dirichlet
         self.u_dirichlet.setLinearRamp(ramp, uu)
         self.v_dirichlet.setLinearRamp(ramp ,vv)
         self.w_dirichlet.setLinearRamp(ramp ,ww)
         self.us_dirichlet.setConstantBC(0.)
         self.vs_dirichlet.setConstantBC(0.)
-        self.ws_dirichlet.setConstantBC(0.)  
+        self.ws_dirichlet.setConstantBC(0.)
         self.k_dirichlet.setConstantBC(kk)
-        self.dissipation_dirichlet.setConstantBC(dd)  
+        self.dissipation_dirichlet.setConstantBC(dd)
         #advective
         self.p_advective.setLinearRamp(ramp, Uin)
         self.pInit_advective.setConstantBC(0.)
@@ -308,8 +308,8 @@ class BC_RANS(BoundaryConditions.BC_Base):
         self.pInit_dirichlet.setLinearBC(p, a1)
         self.pInc_dirichlet.setConstantBC(0.)
         self.k_dirichlet.setConstantBC(kk)
-        self.dissipation_dirichlet.setConstantBC(dd)  
-           
+        self.dissipation_dirichlet.setConstantBC(dd)
+
         # diffusive
         if b_or[0] == 1. or b_or[0] == -1.:
             self.u_diffusive.setConstantBC(0.)
@@ -365,7 +365,7 @@ class BC_RANS(BoundaryConditions.BC_Base):
         if orientation[2] == 1. or orientation[2] == -1.:
             self.w_diffusive.setConstantBC(0.)
             self.ws_diffusive.setConstantBC(0.)
-        
+
         if kInflow is not None:
             self.k_dirichlet.setConstantBC(kInflow)
         else:
@@ -633,7 +633,7 @@ class BC_RANS(BoundaryConditions.BC_Base):
         xx[1] = x[1]
         xx[2] = x[2]
         return self.waves.__cpp_calculate_phi(xx, t)
-    
+
     def __cpp_UnsteadyTwoPhaseVelocityInlet_vof_dirichlet(self, x, t):
         cython.declare(xx=cython.double[3])
         xx[0] = x[0]
@@ -659,7 +659,7 @@ class BC_RANS(BoundaryConditions.BC_Base):
         smoothing: float.
             range within smoothing function is valid.
            [3.0 times mesh element size can be a good value]
-        vert_axis: optional. 
+        vert_axis: optional.
             index of vertical in position vector, must always be
             aligned with gravity, by default set to 1].
         air: optional.
@@ -1108,7 +1108,7 @@ class RelaxationZoneWaveGenerator:
 
 class __cppClass_WavesCharacteristics:
     """
-    Class holding information from WaveTools waves and cnvering it to
+    Class holding information from WaveTools waves and converting it to
     boundary conditions to use for relaxation zones and wave inlet.
     This class is created automatically when passing WaveTools class
     instances to a relaxation zone or wave inlet BC.
