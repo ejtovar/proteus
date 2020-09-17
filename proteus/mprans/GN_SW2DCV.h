@@ -1143,12 +1143,6 @@ public:
     xt::pyarray<double> &heta_dof = args.m_darray["heta_dof"];
     xt::pyarray<double> &hw_dof = args.m_darray["hw_dof"];
     xt::pyarray<double> &hbeta_dof = args.m_darray["hbeta_dof"];
-    xt::pyarray<double> &h_dof_sge = args.m_darray["h_dof_sge"];
-    xt::pyarray<double> &hu_dof_sge = args.m_darray["hu_dof_sge"];
-    xt::pyarray<double> &hv_dof_sge = args.m_darray["hv_dof_sge"];
-    xt::pyarray<double> &heta_dof_sge = args.m_darray["heta_dof_sge"];
-    xt::pyarray<double> &hw_dof_sge = args.m_darray["hw_dof_sge"];
-    xt::pyarray<double> &hbeta_dof_sge = args.m_darray["hbeta_dof_sge"];
     xt::pyarray<double> &q_mass_acc = args.m_darray["q_mass_acc"];
     xt::pyarray<double> &q_mom_hu_acc = args.m_darray["q_mom_hu_acc"];
     xt::pyarray<double> &q_mom_hv_acc = args.m_darray["q_mom_hv_acc"];
@@ -1346,33 +1340,34 @@ public:
         // get the physical integration weight
         dV = fabs(jacDet) * dV_ref[k];
         // get the solution at current time
-        ck.valFromDOF(h_dof.data(), &h_l2g[eN_nDOF_trial_element],
-                      &h_trial_ref[k * nDOF_trial_element], h);
+        ck.valFromDOF(h_dof.data(), &h_l2g.data()[eN_nDOF_trial_element],
+                      &h_trial_ref.data()[k * nDOF_trial_element], h);
         ck.valFromDOF(hu_dof.data(), &vel_l2g[eN_nDOF_trial_element],
-                      &vel_trial_ref[k * nDOF_trial_element], hu);
+                      &vel_trial_ref.data()[k * nDOF_trial_element], hu);
         ck.valFromDOF(hv_dof.data(), &vel_l2g[eN_nDOF_trial_element],
-                      &vel_trial_ref[k * nDOF_trial_element], hv);
-        ck.valFromDOF(heta_dof.data(), &vel_l2g[eN_nDOF_trial_element],
-                      &vel_trial_ref[k * nDOF_trial_element], heta);
-        ck.valFromDOF(hw_dof.data(), &vel_l2g[eN_nDOF_trial_element],
-                      &vel_trial_ref[k * nDOF_trial_element], hw);
-        ck.valFromDOF(hbeta_dof.data(), &vel_l2g[eN_nDOF_trial_element],
-                      &vel_trial_ref[k * nDOF_trial_element], hbeta);
+                      &vel_trial_ref.data()[k * nDOF_trial_element], hv);
+        ck.valFromDOF(heta_dof.data(), &vel_l2g.data()[eN_nDOF_trial_element],
+                      &vel_trial_ref.data()[k * nDOF_trial_element], heta);
+        ck.valFromDOF(hw_dof.data(), &vel_l2g.data()[eN_nDOF_trial_element],
+                      &vel_trial_ref.data()[k * nDOF_trial_element], hw);
+        ck.valFromDOF(hbeta_dof.data(), &vel_l2g.data()[eN_nDOF_trial_element],
+                      &vel_trial_ref.data()[k * nDOF_trial_element], hbeta);
         // get the solution at the lstage
-        ck.valFromDOF(h_dof_old.data(), &h_l2g[eN_nDOF_trial_element],
-                      &h_trial_ref[k * nDOF_trial_element], h_old);
-        ck.valFromDOF(hu_dof_old.data(), &vel_l2g[eN_nDOF_trial_element],
-                      &vel_trial_ref[k * nDOF_trial_element], hu_old);
-        ck.valFromDOF(hv_dof_old.data(), &vel_l2g[eN_nDOF_trial_element],
-                      &vel_trial_ref[k * nDOF_trial_element], hv_old);
+        ck.valFromDOF(h_dof_old.data(), &h_l2g.data()[eN_nDOF_trial_element],
+                      &h_trial_ref.data()[k * nDOF_trial_element], h_old);
+        ck.valFromDOF(hu_dof_old.data(), &vel_l2g.data()[eN_nDOF_trial_element],
+                      &vel_trial_ref.data()[k * nDOF_trial_element], hu_old);
+        ck.valFromDOF(hv_dof_old.data(), &vel_l2g.data()[eN_nDOF_trial_element],
+                      &vel_trial_ref.data()[k * nDOF_trial_element], hv_old);
         ck.valFromDOF(heta_dof_old.data(), &vel_l2g[eN_nDOF_trial_element],
-                      &vel_trial_ref[k * nDOF_trial_element], heta_old);
-        ck.valFromDOF(hw_dof_old.data(), &vel_l2g[eN_nDOF_trial_element],
-                      &vel_trial_ref[k * nDOF_trial_element], hw_old);
-        ck.valFromDOF(hbeta_dof_old.data(), &vel_l2g[eN_nDOF_trial_element],
-                      &vel_trial_ref[k * nDOF_trial_element], hbeta_old);
+                      &vel_trial_ref.data()[k * nDOF_trial_element], heta_old);
+        ck.valFromDOF(hw_dof_old.data(), &vel_l2g.data()[eN_nDOF_trial_element],
+                      &vel_trial_ref.data()[k * nDOF_trial_element], hw_old);
+        ck.valFromDOF(hbeta_dof_old.data(),
+                      &vel_l2g.data()[eN_nDOF_trial_element],
+                      &vel_trial_ref.data()[k * nDOF_trial_element], hbeta_old);
         // calculate cell based CFL to keep a reference
-        calculateCFL(elementDiameter[eN], g, h_old, hu_old, hv_old, hEps,
+        calculateCFL(elementDiameter.data()[eN], g, h_old, hu_old, hv_old, hEps,
                      q_cfl[eN_k]);
         // precalculate test function products with integration weights
         for (int j = 0; j < nDOF_trial_element; j++)
@@ -2081,12 +2076,6 @@ public:
     xt::pyarray<double> &heta_dof = args.m_darray["heta_dof"];
     xt::pyarray<double> &hw_dof = args.m_darray["hw_dof"];
     xt::pyarray<double> &hbeta_dof = args.m_darray["hbeta_dof"];
-    xt::pyarray<double> &h_dof_sge = args.m_darray["h_dof_sge"];
-    xt::pyarray<double> &hu_dof_sge = args.m_darray["hu_dof_sge"];
-    xt::pyarray<double> &hv_dof_sge = args.m_darray["hv_dof_sge"];
-    xt::pyarray<double> &heta_dof_sge = args.m_darray["heta_dof_sge"];
-    xt::pyarray<double> &hw_dof_sge = args.m_darray["hw_dof_sge"];
-    xt::pyarray<double> &hbeta_dof_sge = args.m_darray["hbeta_dof_sge"];
     xt::pyarray<double> &q_mass_acc_beta_bdf =
         args.m_darray["q_mass_acc_beta_bdf"];
     xt::pyarray<double> &q_mom_hu_acc_beta_bdf =
@@ -2448,9 +2437,6 @@ public:
     xt::pyarray<double> &h_dof = args.m_darray["h_dof"];
     xt::pyarray<double> &hu_dof = args.m_darray["hu_dof"];
     xt::pyarray<double> &hv_dof = args.m_darray["hv_dof"];
-    xt::pyarray<double> &h_dof_sge = args.m_darray["h_dof_sge"];
-    xt::pyarray<double> &hu_dof_sge = args.m_darray["hu_dof_sge"];
-    xt::pyarray<double> &hv_dof_sge = args.m_darray["hv_dof_sge"];
     xt::pyarray<double> &q_mass_acc_beta_bdf =
         args.m_darray["q_mass_acc_beta_bdf"];
     xt::pyarray<double> &q_mom_hu_acc_beta_bdf =

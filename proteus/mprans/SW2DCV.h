@@ -890,10 +890,6 @@ public:
       double small_rescale = g * hEps * hEps / eps;
       double rescale = fmax(fabs(etaMax[i] - etaMin[i]) / 2., small_rescale);
 
-      // define alternative rescale factor
-      double new_rescale =
-          fmax(fabs(entropy_flux) + fabs(-sum_entprime_flux), 1E-30);
-
       // COMPUTE ENTROPY RESIDUAL //
       double one_over_entNormFactori = 1.0 / rescale;
       global_entropy_residual[i] =
@@ -962,9 +958,6 @@ public:
     xt::pyarray<double> &h_dof = args.m_darray["h_dof"];
     xt::pyarray<double> &hu_dof = args.m_darray["hu_dof"];
     xt::pyarray<double> &hv_dof = args.m_darray["hv_dof"];
-    xt::pyarray<double> &h_dof_sge = args.m_darray["h_dof_sge"];
-    xt::pyarray<double> &hu_dof_sge = args.m_darray["hu_dof_sge"];
-    xt::pyarray<double> &hv_dof_sge = args.m_darray["hv_dof_sge"];
     xt::pyarray<double> &q_mass_acc = args.m_darray["q_mass_acc"];
     xt::pyarray<double> &q_mom_hu_acc = args.m_darray["q_mom_hu_acc"];
     xt::pyarray<double> &q_mom_hv_acc = args.m_darray["q_mom_hv_acc"];
@@ -1458,8 +1451,8 @@ public:
             ///////////////////////
             // ENTROPY VISCOSITY //
             ///////////////////////
-            double dEVij =
-                fmax(global_entropy_residual[i], global_entropy_residual[j]);
+            double dEVij = cE * fmax(global_entropy_residual[i],
+                                     global_entropy_residual[j]);
             dHij = fmin(dLowij, dEVij);
             muHij = fmin(muLowij, dEVij);
 
@@ -1512,9 +1505,9 @@ public:
                          ith_dHij_minus_muHij_times_hvStarStates -
                          ith_muHij_times_hvStates);
           // clean up potential negative water height due to machine precision
-          // if (globalResidual[offset_h + stride_h * i] >= -hEps &&
-          //     globalResidual[offset_h + stride_h * i] < hEps)
-          //   globalResidual[offset_h + stride_h * i] = 0;
+          if (globalResidual[offset_h + stride_h * i] >= -hEps &&
+              globalResidual[offset_h + stride_h * i] < hEps)
+            globalResidual[offset_h + stride_h * i] = 0;
         } else {
           // Distribute residual
           // NOTE: MASS MATRIX IS CONSISTENT
@@ -1636,9 +1629,6 @@ public:
     xt::pyarray<double> &h_dof = args.m_darray["h_dof"];
     xt::pyarray<double> &hu_dof = args.m_darray["hu_dof"];
     xt::pyarray<double> &hv_dof = args.m_darray["hv_dof"];
-    xt::pyarray<double> &h_dof_sge = args.m_darray["h_dof_sge"];
-    xt::pyarray<double> &hu_dof_sge = args.m_darray["hu_dof_sge"];
-    xt::pyarray<double> &hv_dof_sge = args.m_darray["hv_dof_sge"];
     xt::pyarray<double> &q_mass_acc_beta_bdf =
         args.m_darray["q_mass_acc_beta_bdf"];
     xt::pyarray<double> &q_mom_hu_acc_beta_bdf =
@@ -1872,9 +1862,6 @@ public:
     xt::pyarray<double> &h_dof = args.m_darray["h_dof"];
     xt::pyarray<double> &hu_dof = args.m_darray["hu_dof"];
     xt::pyarray<double> &hv_dof = args.m_darray["hv_dof"];
-    xt::pyarray<double> &h_dof_sge = args.m_darray["h_dof_sge"];
-    xt::pyarray<double> &hu_dof_sge = args.m_darray["hu_dof_sge"];
-    xt::pyarray<double> &hv_dof_sge = args.m_darray["hv_dof_sge"];
     xt::pyarray<double> &q_mass_acc_beta_bdf =
         args.m_darray["q_mass_acc_beta_bdf"];
     xt::pyarray<double> &q_mom_hu_acc_beta_bdf =

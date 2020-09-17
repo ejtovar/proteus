@@ -639,12 +639,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         # Vector for mass matrix
         self.check_positivity_water_height = True
         # mesh
-        self.h_dof_sge = self.u[0].dof.copy()
-        self.hu_dof_sge = self.u[1].dof.copy()
-        self.hv_dof_sge = self.u[2].dof.copy()
-        self.heta_dof_sge = self.u[3].dof.copy()
-        self.hw_dof_sge = self.u[4].dof.copy()
-        self.hbeta_dof_sge = self.u[5].dof.copy()
         self.q['x'] = np.zeros((self.mesh.nElements_global, self.nQuadraturePoints_element, 3), 'd')
         self.ebqe['x'] = np.zeros((self.mesh.nExteriorElementBoundaries_global, self.nElementBoundaryQuadraturePoints_elementBoundary, 3), 'd')
         self.ebq_global[('totalFlux', 0)] = np.zeros((self.mesh.nElementBoundaries_global, self.nElementBoundaryQuadraturePoints_elementBoundary), 'd')
@@ -1546,12 +1540,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["heta_dof"] = self.u[3].dof
         argsDict["hw_dof"] = self.u[4].dof
         argsDict["hbeta_dof"] = self.u[5].dof
-        argsDict["h_dof_sge"] = self.h_dof_sge
-        argsDict["hu_dof_sge"] = self.hu_dof_sge
-        argsDict["hv_dof_sge"] = self.hv_dof_sge
-        argsDict["heta_dof_sge"] = self.heta_dof_sge
-        argsDict["hw_dof_sge"] = self.hw_dof_sge
-        argsDict["hbeta_dof_sge"] = self.hbeta_dof_sge
         argsDict["q_mass_acc"] = self.timeIntegration.m_tmp[0]
         argsDict["q_mom_hu_acc"] = self.timeIntegration.m_tmp[1]
         argsDict["q_mom_hv_acc"] = self.timeIntegration.m_tmp[2]
@@ -1757,12 +1745,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["heta_dof"] = self.u[3].dof
         argsDict["hw_dof"] = self.u[4].dof
         argsDict["hbeta_dof"] = self.u[5].dof
-        argsDict["h_dof_sge"] = self.h_dof_sge
-        argsDict["hu_dof_sge"] = self.hu_dof_sge
-        argsDict["hv_dof_sge"] = self.hv_dof_sge
-        argsDict["heta_dof_sge"] = self.heta_dof_sge
-        argsDict["hw_dof_sge"] = self.hw_dof_sge
-        argsDict["hbeta_dof_sge"] = self.hbeta_dof_sge
         argsDict["q_mass_acc_beta_bdf"] = self.timeIntegration.beta_bdf[0]
         argsDict["q_mom_hu_acc_beta_bdf"] = self.timeIntegration.beta_bdf[1]
         argsDict["q_mom_hv_acc_beta_bdf"] = self.timeIntegration.beta_bdf[2]
@@ -2017,12 +1999,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         pass
 
     def calculateAuxiliaryQuantitiesAfterStep(self):
-        self.h_dof_sge[:] = self.u[0].dof
-        self.hu_dof_sge[:] = self.u[1].dof
-        self.hv_dof_sge[:] = self.u[2].dof
-        self.heta_dof_sge[:] = self.u[3].dof
-        self.hw_dof_sge[:] = self.u[4].dof
-        self.hbeta_dof_sge[:] = self.u[5].dof
         OneLevelTransport.calculateAuxiliaryQuantitiesAfterStep(self)
 
     def getForce(self, cg, forceExtractionFaces, force, moment):
