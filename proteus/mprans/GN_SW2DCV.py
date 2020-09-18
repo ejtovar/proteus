@@ -271,7 +271,6 @@ class Coefficients(proteus.TransportCoefficients.TC_base):
 
     def __init__(self,
                  bathymetry,
-                 nu=1.004e-6,
                  g=9.8,
                  nd=2,
                  sd=True,
@@ -291,7 +290,6 @@ class Coefficients(proteus.TransportCoefficients.TC_base):
         self.useRBLES = useRBLES
         self.useMetrics = useMetrics
         self.sd = sd
-        self.nu = nu
         self.g = g
         self.nd = nd
         self.cE = cE
@@ -817,7 +815,7 @@ class LevelModel(proteus.Transport.OneLevelTransport):
 
         self.dH_minus_dL = None
         self.muH_minus_muL = None
-        self.size_of_domain = None # for relaxation of bounds
+        self.size_of_domain = None  # for relaxation of bounds
         # NORMALS
         self.COMPUTE_NORMALS = 1
         self.normalx = None
@@ -1523,7 +1521,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["useRBLES"] = self.coefficients.useRBLES
         argsDict["useMetrics"] = self.coefficients.useMetrics
         argsDict["alphaBDF"] = self.timeIntegration.alpha_bdf
-        argsDict["nu"] = self.coefficients.nu
         argsDict["g"] = self.coefficients.g
         argsDict["h_l2g"] = self.u[0].femSpace.dofMap.l2g
         argsDict["vel_l2g"] = self.u[1].femSpace.dofMap.l2g
@@ -1734,7 +1731,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["useRBLES"] = self.coefficients.useRBLES
         argsDict["useMetrics"] = self.coefficients.useMetrics
         argsDict["alphaBDF"] = self.timeIntegration.alpha_bdf
-        argsDict["nu"] = self.coefficients.nu
         argsDict["g"] = self.coefficients.g
         argsDict["h_l2g"] = self.u[0].femSpace.dofMap.l2g
         argsDict["vel_l2g"] = self.u[1].femSpace.dofMap.l2g

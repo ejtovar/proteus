@@ -947,7 +947,6 @@ public:
     double useRBLES = args.m_dscalar["useRBLES"];
     double useMetrics = args.m_dscalar["useMetrics"];
     double alphaBDF = args.m_dscalar["alphaBDF"];
-    double nu = args.m_dscalar["nu"];
     double g = args.m_dscalar["g"];
     xt::pyarray<int> &h_l2g = args.m_iarray["h_l2g"];
     xt::pyarray<int> &vel_l2g = args.m_iarray["vel_l2g"];
@@ -1621,7 +1620,6 @@ public:
     double useRBLES = args.m_dscalar["useRBLES"];
     double useMetrics = args.m_dscalar["useMetrics"];
     double alphaBDF = args.m_dscalar["alphaBDF"];
-    double nu = args.m_dscalar["nu"];
     double g = args.m_dscalar["g"];
     xt::pyarray<int> &h_l2g = args.m_iarray["h_l2g"];
     xt::pyarray<int> &vel_l2g = args.m_iarray["vel_l2g"];
@@ -1854,7 +1852,6 @@ public:
     double useRBLES = args.m_dscalar["useRBLES"];
     double useMetrics = args.m_dscalar["useMetrics"];
     double alphaBDF = args.m_dscalar["alphaBDF"];
-    double nu = args.m_dscalar["nu"];
     double g = args.m_dscalar["g"];
     xt::pyarray<int> &h_l2g = args.m_iarray["h_l2g"];
     xt::pyarray<int> &vel_l2g = args.m_iarray["vel_l2g"];
