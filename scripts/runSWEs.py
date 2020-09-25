@@ -44,7 +44,7 @@ parser.add_option("-n","--num_proc",
 # CLEAN FOLDER #
 ################
 if opts.clean is not None:
-    os.system("rm -r *face *.csv __pycache__ *mesh* *.poly *.pyc *.log *.edge *.ele *.neigh *.node *.h5 *.xmf *~ *#* *.txt *smb *pos *dmg splitMesh")
+    os.system("rm -r *face *.csv __pycache__ *mesh* *.poly *.pyc *.log *.edge *.ele *.neigh *.node *.h5 *.xmf *~ *#* *.txt *smb *pos *dmg splitMesh *.res *.dat")
     exit()
 
 ############

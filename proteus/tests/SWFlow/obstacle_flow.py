@@ -177,12 +177,14 @@ initialConditions = {'water_height': water_height_at_t0(),
                      'x_mom': x_mom_at_t0(),
                      'y_mom': y_mom_at_t0(),
                      'h_times_eta': heta_at_t0(),
-                     'h_times_w': hw_at_t0()}
+                     'h_times_w': hw_at_t0(),
+                     'h_times_beta':Zero()}
 boundaryConditions = {'water_height': h_DBC,
                       'x_mom': x_mom_DBC,
                       'y_mom': y_mom_DBC,
                       'h_times_eta': heta_DBC,
-                      'h_times_w': hw_DBC}
+                      'h_times_w': hw_DBC,
+                      'h_times_beta':x_mom_DBC}
 # if want to use reflecting conditions on all boundaries switch above to
 # boundaryConditions = {'water_height': lambda x, flag: None,
 #                       'x_mom': lambda x, flag: None,

@@ -87,7 +87,6 @@ class RKEV(proteus.TimeIntegration.SSP):
         argsDict["csrRowIndeces_DofLoops"] = rowptr_cMatrix
         argsDict["csrColumnOffsets_DofLoops"] = colind_cMatrix
         argsDict["hEps"] = self.transport.hEps
-        argsDict["hReg"] = self.transport.hReg
         argsDict["Cx"] = Cx
         argsDict["Cy"] = Cy
         argsDict["CTx"] = CTx
@@ -902,7 +901,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["dH_minus_dL"] = self.dH_minus_dL
         argsDict["muH_minus_muL"] = self.muH_minus_muL
         argsDict["hEps"] = self.hEps
-        argsDict["hReg"] = self.hReg
         argsDict["LUMPED_MASS_MATRIX"] = self.coefficients.LUMPED_MASS_MATRIX
         argsDict["dLow"] = self.dLow
         argsDict["hBT"] = self.hBT
@@ -1324,8 +1322,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["mesh_trial_ref"] = self.u[0].femSpace.elementMaps.psi
         argsDict["mesh_grad_trial_ref"] = self.u[0].femSpace.elementMaps.grad_psi
         argsDict["mesh_dof"] = self.mesh.nodeArray
-        argsDict["mesh_velocity_dof"] = self.mesh.nodeVelocityArray
-        argsDict["MOVING_DOMAIN"] = self.MOVING_DOMAIN
         argsDict["mesh_l2g"] = self.mesh.elementNodesArray
         argsDict["dV_ref"] = self.elementQuadratureWeights[('u', 0)]
         argsDict["h_trial_ref"] = self.u[0].femSpace.psi
@@ -1338,7 +1334,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["vel_grad_test_ref"] = self.u[1].femSpace.grad_psi
         argsDict["mesh_trial_trace_ref"] = self.u[0].femSpace.elementMaps.psi_trace
         argsDict["mesh_grad_trial_trace_ref"] = self.u[0].femSpace.elementMaps.grad_psi_trace
-        argsDict["dS_ref"] = self.elementBoundaryQuadratureWeights[('u', 0)]
         argsDict["h_trial_trace_ref"] = self.u[0].femSpace.psi_trace
         argsDict["h_grad_trial_trace_ref"] = self.u[0].femSpace.grad_psi_trace
         argsDict["h_test_trace_ref"] = self.u[0].femSpace.psi_trace
@@ -1351,9 +1346,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["boundaryJac_ref"] = self.u[0].femSpace.elementMaps.boundaryJacobians
         argsDict["elementDiameter"] = self.elementDiameter
         argsDict["nElements_global"] = self.mesh.nElements_global
-        argsDict["useRBLES"] = self.coefficients.useRBLES
-        argsDict["useMetrics"] = self.coefficients.useMetrics
-        argsDict["alphaBDF"] = self.timeIntegration.alpha_bdf
         argsDict["g"] = self.coefficients.g
         argsDict["h_l2g"] = self.u[0].femSpace.dofMap.l2g
         argsDict["vel_l2g"] = self.u[1].femSpace.dofMap.l2g
@@ -1364,13 +1356,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["h_dof"] = self.u[0].dof
         argsDict["hu_dof"] = self.u[1].dof
         argsDict["hv_dof"] = self.u[2].dof
-        argsDict["q_mass_acc"] = self.timeIntegration.m_tmp[0]
-        argsDict["q_mom_hu_acc"] = self.timeIntegration.m_tmp[1]
-        argsDict["q_mom_hv_acc"] = self.timeIntegration.m_tmp[2]
-        argsDict["q_mass_adv"] = self.q[('f', 0)]
-        argsDict["q_mass_acc_beta_bdf"] = self.timeIntegration.beta_bdf[0]
-        argsDict["q_mom_hu_acc_beta_bdf"] = self.timeIntegration.beta_bdf[1]
-        argsDict["q_mom_hv_acc_beta_bdf"] = self.timeIntegration.beta_bdf[2]
         argsDict["q_cfl"] = self.q[('cfl', 0)]
         argsDict["sdInfo_hu_hu_rowptr"] = self.coefficients.sdInfo[(1, 1)][0]
         argsDict["sdInfo_hu_hu_colind"] = self.coefficients.sdInfo[(1, 1)][1]
@@ -1533,9 +1518,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["boundaryJac_ref"] = self.u[0].femSpace.elementMaps.boundaryJacobians
         argsDict["elementDiameter"] = self.elementDiameter
         argsDict["nElements_global"] = self.mesh.nElements_global
-        argsDict["useRBLES"] = self.coefficients.useRBLES
-        argsDict["useMetrics"] = self.coefficients.useMetrics
-        argsDict["alphaBDF"] = self.timeIntegration.alpha_bdf
         argsDict["g"] = self.coefficients.g
         argsDict["h_l2g"] = self.u[0].femSpace.dofMap.l2g
         argsDict["vel_l2g"] = self.u[1].femSpace.dofMap.l2g

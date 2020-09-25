@@ -261,7 +261,6 @@ public:
     xt::pyarray<double> &dH_minus_dL = args.m_darray["dH_minus_dL"];
     xt::pyarray<double> &muH_minus_muL = args.m_darray["muH_minus_muL"];
     double hEps = args.m_dscalar["hEps"];
-    xt::pyarray<double> &hReg = args.m_darray["hReg"];
     int LUMPED_MASS_MATRIX = args.m_iscalar["LUMPED_MASS_MATRIX"];
     xt::pyarray<double> &dLow = args.m_darray["dLow"];
     xt::pyarray<double> &hBT = args.m_darray["hBT"];
@@ -685,7 +684,6 @@ public:
     xt::pyarray<int> &csrColumnOffsets_DofLoops =
         args.m_iarray["csrColumnOffsets_DofLoops"];
     double hEps = args.m_dscalar["hEps"];
-    xt::pyarray<double> &hReg = args.m_darray["hReg"];
     xt::pyarray<double> &Cx = args.m_darray["Cx"];
     xt::pyarray<double> &Cy = args.m_darray["Cy"];
     xt::pyarray<double> &CTx = args.m_darray["CTx"];
@@ -908,8 +906,6 @@ public:
     xt::pyarray<double> &mesh_grad_trial_ref =
         args.m_darray["mesh_grad_trial_ref"];
     xt::pyarray<double> &mesh_dof = args.m_darray["mesh_dof"];
-    xt::pyarray<double> &mesh_velocity_dof = args.m_darray["mesh_velocity_dof"];
-    double MOVING_DOMAIN = args.m_dscalar["MOVING_DOMAIN"];
     xt::pyarray<int> &mesh_l2g = args.m_iarray["mesh_l2g"];
     xt::pyarray<double> &dV_ref = args.m_darray["dV_ref"];
     xt::pyarray<double> &h_trial_ref = args.m_darray["h_trial_ref"];
@@ -925,7 +921,6 @@ public:
         args.m_darray["mesh_trial_trace_ref"];
     xt::pyarray<double> &mesh_grad_trial_trace_ref =
         args.m_darray["mesh_grad_trial_trace_ref"];
-    xt::pyarray<double> &dS_ref = args.m_darray["dS_ref"];
     xt::pyarray<double> &h_trial_trace_ref = args.m_darray["h_trial_trace_ref"];
     xt::pyarray<double> &h_grad_trial_trace_ref =
         args.m_darray["h_grad_trial_trace_ref"];
@@ -944,9 +939,6 @@ public:
     xt::pyarray<double> &boundaryJac_ref = args.m_darray["boundaryJac_ref"];
     xt::pyarray<double> &elementDiameter = args.m_darray["elementDiameter"];
     int nElements_global = args.m_iscalar["nElements_global"];
-    double useRBLES = args.m_dscalar["useRBLES"];
-    double useMetrics = args.m_dscalar["useMetrics"];
-    double alphaBDF = args.m_dscalar["alphaBDF"];
     double g = args.m_dscalar["g"];
     xt::pyarray<int> &h_l2g = args.m_iarray["h_l2g"];
     xt::pyarray<int> &vel_l2g = args.m_iarray["vel_l2g"];
@@ -957,16 +949,6 @@ public:
     xt::pyarray<double> &h_dof = args.m_darray["h_dof"];
     xt::pyarray<double> &hu_dof = args.m_darray["hu_dof"];
     xt::pyarray<double> &hv_dof = args.m_darray["hv_dof"];
-    xt::pyarray<double> &q_mass_acc = args.m_darray["q_mass_acc"];
-    xt::pyarray<double> &q_mom_hu_acc = args.m_darray["q_mom_hu_acc"];
-    xt::pyarray<double> &q_mom_hv_acc = args.m_darray["q_mom_hv_acc"];
-    xt::pyarray<double> &q_mass_adv = args.m_darray["q_mass_adv"];
-    xt::pyarray<double> &q_mass_acc_beta_bdf =
-        args.m_darray["q_mass_acc_beta_bdf"];
-    xt::pyarray<double> &q_mom_hu_acc_beta_bdf =
-        args.m_darray["q_mom_hu_acc_beta_bdf"];
-    xt::pyarray<double> &q_mom_hv_acc_beta_bdf =
-        args.m_darray["q_mom_hv_acc_beta_bdf"];
     xt::pyarray<double> &q_cfl = args.m_darray["q_cfl"];
     xt::pyarray<int> &sdInfo_hu_hu_rowptr =
         args.m_iarray["sdInfo_hu_hu_rowptr"];
@@ -1617,9 +1599,6 @@ public:
     xt::pyarray<double> &boundaryJac_ref = args.m_darray["boundaryJac_ref"];
     xt::pyarray<double> &elementDiameter = args.m_darray["elementDiameter"];
     int nElements_global = args.m_iscalar["nElements_global"];
-    double useRBLES = args.m_dscalar["useRBLES"];
-    double useMetrics = args.m_dscalar["useMetrics"];
-    double alphaBDF = args.m_dscalar["alphaBDF"];
     double g = args.m_dscalar["g"];
     xt::pyarray<int> &h_l2g = args.m_iarray["h_l2g"];
     xt::pyarray<int> &vel_l2g = args.m_iarray["vel_l2g"];
@@ -1849,9 +1828,6 @@ public:
     xt::pyarray<double> &boundaryJac_ref = args.m_darray["boundaryJac_ref"];
     xt::pyarray<double> &elementDiameter = args.m_darray["elementDiameter"];
     int nElements_global = args.m_iscalar["nElements_global"];
-    double useRBLES = args.m_dscalar["useRBLES"];
-    double useMetrics = args.m_dscalar["useMetrics"];
-    double alphaBDF = args.m_dscalar["alphaBDF"];
     double g = args.m_dscalar["g"];
     xt::pyarray<int> &h_l2g = args.m_iarray["h_l2g"];
     xt::pyarray<int> &vel_l2g = args.m_iarray["vel_l2g"];

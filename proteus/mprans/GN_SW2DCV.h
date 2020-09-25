@@ -11,16 +11,22 @@
 
 namespace py = pybind11;
 
-#define GLOBAL_FCT 0
 #define POWER_SMOOTHNESS_INDICATOR 2
 #define VEL_FIX_POWER 2.
-#define REESTIMATE_MAX_EDGE_BASED_CFL 0
 #define LAMBDA_MGN 1
 #define IF_BOTH_GAMMA_BRANCHES 0
 #define LIMITING_ITERATION 2
 
 /* inline functions */
 namespace proteus {
+
+// for relaxation zones
+struct compare {
+  int key;
+  compare(int const &i) : key(i) {}
+
+  bool operator()(int const &i) { return (i == key); }
+};
 
 // for mGN stuff "max" wave speeds. See section 4.4 of first mGN paper by
 // Guermond, Popov, Tovar, Kees for formulas
@@ -86,24 +92,6 @@ inline double ENTROPY_FLUX2(const double &g, const double &h, const double &hu,
          hv * one_over_hReg;
 }
 // FOR ESTIMATING MAX WAVE SPEEDS
-inline double f(const double &g, const double &h, const double &hZ) {
-  return ((h <= hZ) ? 2. * (sqrt(g * h) - sqrt(g * hZ))
-                    : (h - hZ) * sqrt(0.5 * g * (h + hZ) / h / hZ));
-}
-inline double phi(const double &g, const double &h, const double &hL,
-                  const double &hR, const double &uL, const double &uR) {
-  return (f(g, h, hL) + f(g, h, hR) + uR - uL);
-}
-inline double fp(const double &g, const double &h, const double &hZ) {
-  return ((h <= hZ)
-              ? sqrt(g / h)
-              : g * (2 * h * h + h * hZ + hZ * hZ) /
-                    (2 * sqrt(2 * g) * h * h * hZ * sqrt(1 / h + 1 / hZ)));
-}
-inline double phip(const double &g, const double &h, const double &hL,
-                   const double &hR) {
-  return (fp(g, h, hL) + fp(g, h, hR));
-}
 inline double nu1(const double &g, const double &hStar, const double &hL,
                   const double &uL, const double &one_over_hL) {
   return (uL - sqrt(g * hL) *
@@ -116,45 +104,39 @@ inline double nu3(const double &g, const double &hStar, const double &hR,
                    sqrt((1. + fmax((hStar - hR) / 2. * one_over_hR, 0.0)) *
                         (1. + fmax((hStar - hR) * one_over_hR, 0.))));
 }
-inline double phiDiff(const double &g, const double &h1k, const double &h2k,
-                      const double &hL, const double &hR, const double &uL,
-                      const double &uR) {
-  return ((phi(g, h2k, hL, hR, uL, uR) - phi(g, h1k, hL, hR, uL, uR)) /
-          (h2k - h1k));
-}
-inline double phiDDiff1(const double &g, const double &h1k, const double &h2k,
-                        const double &hL, const double &hR, const double &uL,
-                        const double &uR) {
-  return ((phiDiff(g, h1k, h2k, hL, hR, uL, uR) - phip(g, h1k, hL, hR)) /
-          (h2k - h1k));
-}
-inline double phiDDiff2(const double &g, const double &h1k, const double &h2k,
-                        const double &hL, const double &hR, const double &uL,
-                        const double &uR) {
-  return ((phip(g, h2k, hL, hR) - phiDiff(g, h1k, h2k, hL, hR, uL, uR)) /
-          (h2k - h1k));
-}
-inline double hStarLFromQuadPhiFromAbove(const double &g, const double &hStarL,
-                                         const double &hStarR, const double &hL,
-                                         const double &hR, const double &uL,
-                                         const double &uR) {
-  return (hStarL -
-          2 * phi(g, hStarL, hL, hR, uL, uR) /
-              (phip(g, hStarL, hL, hR) +
-               sqrt(std::pow(phip(g, hStarL, hL, hR), 2) -
-                    4 * phi(g, hStarL, hL, hR, uL, uR) *
-                        phiDDiff1(g, hStarL, hStarR, hL, hR, uL, uR))));
-}
-inline double hStarRFromQuadPhiFromBelow(const double &g, const double &hStarL,
-                                         const double &hStarR, const double &hL,
-                                         const double &hR, const double &uL,
-                                         const double &uR) {
-  return (hStarR -
-          2 * phi(g, hStarR, hL, hR, uL, uR) /
-              (phip(g, hStarR, hL, hR) +
-               sqrt(std::pow(phip(g, hStarR, hL, hR), 2) -
-                    4 * phi(g, hStarR, hL, hR, uL, uR) *
-                        phiDDiff2(g, hStarL, hStarR, hL, hR, uL, uR))));
+inline void calculateRelaxationZones(
+    const double h, const double hu, const double hv, const double heta,
+    const double hw, const double h_wave, const double hu_wave,
+    const double hv_wave, const double heta_wave, const double hw_wave,
+    double &h_source, double &hu_source, double &hv_source, double &heta_source,
+    double &hw_source, double &h_newSource, double &hu_newSource,
+    double &hv_newSource, double &heta_newSource, double &hw_newSource,
+    const double x_location, const double lumped_mass, const double speed) {
+
+  // declare stuff
+  double x, mesh_size;
+  x = x_location;
+  mesh_size = sqrt(lumped_mass);
+
+  // double relaxation_function = (exp(pow(x, 3.5)) - 1.) / (exp(1.) - 1.);
+  double denom = 2.0 * (-36. / (2.0 * log(0.005)));
+  double relaxation_function =
+      speed / mesh_size * exp(-pow(x - 16., 2.0) / denom);
+
+  // Add sources to equations
+  // h_source -=
+  //     relaxation_function * viscosity * (alpha + beta * uc) * (h - h_wave);
+  hu_source += relaxation_function * (hu - hu_wave) * lumped_mass;
+  hu_newSource -= relaxation_function * (hu - hu_wave) * lumped_mass;
+  //  relaxation_function * viscosity * (alpha + beta * uc) * (hu - hu_wave);
+  hv_source += relaxation_function * (hv - hv_wave) * lumped_mass;
+  hv_newSource -= relaxation_function * (hv - hv_wave) * lumped_mass;
+  //  relaxation_function * viscosity * (alpha + beta * uc) * (hv - hv_wave);
+  // heta_source -= relaxation_function * viscosity * (alpha + beta * uc) *
+  //                (heta - heta_wave);
+  hw_source += relaxation_function * (hw - hw_wave) * lumped_mass;
+  hw_newSource -= relaxation_function * (hw - hw_wave) * lumped_mass;
+  //    relaxation_function * viscosity * (alpha + beta * uc) * (hw - hw_wave);
 }
 } // end namespace proteus
 
@@ -284,7 +266,6 @@ public:
     xt::pyarray<double> &dH_minus_dL = args.m_darray["dH_minus_dL"];
     xt::pyarray<double> &muH_minus_muL = args.m_darray["muH_minus_muL"];
     double hEps = args.m_dscalar["hEps"];
-    xt::pyarray<double> &hReg = args.m_darray["hReg"];
     int LUMPED_MASS_MATRIX = args.m_iscalar["LUMPED_MASS_MATRIX"];
     xt::pyarray<double> &dLow = args.m_darray["dLow"];
     xt::pyarray<double> &hBT = args.m_darray["hBT"];
@@ -807,8 +788,11 @@ public:
           abort();
         } else {
           // clean up uHigh from round off error
-          if (limited_hnp1[i] < hEps)
+          if (limited_hnp1[i] < hEps) {
             limited_hnp1[i] = 0.0;
+            limited_hetanp1[i] = 0.0;
+          }
+
           double aux = fmax(limited_hnp1[i], hEps);
           limited_hunp1[i] *= 2 * std::pow(limited_hnp1[i], VEL_FIX_POWER) /
                               (std::pow(limited_hnp1[i], VEL_FIX_POWER) +
@@ -816,9 +800,6 @@ public:
           limited_hvnp1[i] *= 2 * std::pow(limited_hnp1[i], VEL_FIX_POWER) /
                               (std::pow(limited_hnp1[i], VEL_FIX_POWER) +
                                std::pow(aux, VEL_FIX_POWER));
-          limited_hetanp1[i] *= 2 * std::pow(limited_hnp1[i], VEL_FIX_POWER) /
-                                (std::pow(limited_hnp1[i], VEL_FIX_POWER) +
-                                 std::pow(aux, VEL_FIX_POWER));
           limited_hwnp1[i] *= 2 * std::pow(limited_hnp1[i], VEL_FIX_POWER) /
                               (std::pow(limited_hnp1[i], VEL_FIX_POWER) +
                                std::pow(aux, VEL_FIX_POWER));
@@ -853,7 +834,6 @@ public:
     xt::pyarray<int> &csrColumnOffsets_DofLoops =
         args.m_iarray["csrColumnOffsets_DofLoops"];
     double hEps = args.m_dscalar["hEps"];
-    xt::pyarray<double> &hReg = args.m_darray["hReg"];
     xt::pyarray<double> &Cx = args.m_darray["Cx"];
     xt::pyarray<double> &Cy = args.m_darray["Cy"];
     xt::pyarray<double> &CTx = args.m_darray["CTx"];
@@ -924,7 +904,6 @@ public:
     xt::pyarray<double> &h_dof_old = args.m_darray["h_dof_old"];
     xt::pyarray<double> &hu_dof_old = args.m_darray["hu_dof_old"];
     xt::pyarray<double> &hv_dof_old = args.m_darray["hv_dof_old"];
-    xt::pyarray<double> &heta_dof_old = args.m_darray["heta_dof_old"];
     xt::pyarray<double> &b_dof = args.m_darray["b_dof"];
     xt::pyarray<double> &Cx = args.m_darray["Cx"];
     xt::pyarray<double> &Cy = args.m_darray["Cy"];
@@ -980,7 +959,6 @@ public:
       double hi = h_dof_old[i];
       double hui = hu_dof_old[i];
       double hvi = hv_dof_old[i];
-      double hetai = heta_dof_old[i];
       double Zi = b_dof[i];
 
       // Define some things using above
@@ -988,9 +966,7 @@ public:
           2 * hi / (hi * hi + std::pow(fmax(hi, hEps), 2)); // hEps
       double ui = hui * one_over_hiReg;
       double vi = hvi * one_over_hiReg;
-      double etai = hetai * one_over_hiReg;
       double mi = lumped_mass_matrix[i];
-      double meshSizei = std::sqrt(mi);
 
       // initialize etaMax and etaMin
       etaMax[i] = fabs(eta[i]);
@@ -1014,7 +990,6 @@ public:
         double hj = h_dof_old[j];
         double huj = hu_dof_old[j];
         double hvj = hv_dof_old[j];
-        double hetaj = heta_dof_old[j];
         double Zj = b_dof[j];
 
         // Then define some things here using above
@@ -1087,8 +1062,6 @@ public:
     xt::pyarray<double> &mesh_grad_trial_ref =
         args.m_darray["mesh_grad_trial_ref"];
     xt::pyarray<double> &mesh_dof = args.m_darray["mesh_dof"];
-    xt::pyarray<double> &mesh_velocity_dof = args.m_darray["mesh_velocity_dof"];
-    double MOVING_DOMAIN = args.m_dscalar["MOVING_DOMAIN"];
     xt::pyarray<int> &mesh_l2g = args.m_iarray["mesh_l2g"];
     xt::pyarray<double> &dV_ref = args.m_darray["dV_ref"];
     xt::pyarray<double> &h_trial_ref = args.m_darray["h_trial_ref"];
@@ -1104,7 +1077,6 @@ public:
         args.m_darray["mesh_trial_trace_ref"];
     xt::pyarray<double> &mesh_grad_trial_trace_ref =
         args.m_darray["mesh_grad_trial_trace_ref"];
-    xt::pyarray<double> &dS_ref = args.m_darray["dS_ref"];
     xt::pyarray<double> &h_trial_trace_ref = args.m_darray["h_trial_trace_ref"];
     xt::pyarray<double> &h_grad_trial_trace_ref =
         args.m_darray["h_grad_trial_trace_ref"];
@@ -1123,9 +1095,6 @@ public:
     xt::pyarray<double> &boundaryJac_ref = args.m_darray["boundaryJac_ref"];
     xt::pyarray<double> &elementDiameter = args.m_darray["elementDiameter"];
     int nElements_global = args.m_iscalar["nElements_global"];
-    double useRBLES = args.m_dscalar["useRBLES"];
-    double useMetrics = args.m_dscalar["useMetrics"];
-    double alphaBDF = args.m_dscalar["alphaBDF"];
     double g = args.m_dscalar["g"];
     xt::pyarray<int> &h_l2g = args.m_iarray["h_l2g"];
     xt::pyarray<int> &vel_l2g = args.m_iarray["vel_l2g"];
@@ -1142,16 +1111,6 @@ public:
     xt::pyarray<double> &heta_dof = args.m_darray["heta_dof"];
     xt::pyarray<double> &hw_dof = args.m_darray["hw_dof"];
     xt::pyarray<double> &hbeta_dof = args.m_darray["hbeta_dof"];
-    xt::pyarray<double> &q_mass_acc = args.m_darray["q_mass_acc"];
-    xt::pyarray<double> &q_mom_hu_acc = args.m_darray["q_mom_hu_acc"];
-    xt::pyarray<double> &q_mom_hv_acc = args.m_darray["q_mom_hv_acc"];
-    xt::pyarray<double> &q_mass_adv = args.m_darray["q_mass_adv"];
-    xt::pyarray<double> &q_mass_acc_beta_bdf =
-        args.m_darray["q_mass_acc_beta_bdf"];
-    xt::pyarray<double> &q_mom_hu_acc_beta_bdf =
-        args.m_darray["q_mom_hu_acc_beta_bdf"];
-    xt::pyarray<double> &q_mom_hv_acc_beta_bdf =
-        args.m_darray["q_mom_hv_acc_beta_bdf"];
     xt::pyarray<double> &q_cfl = args.m_darray["q_cfl"];
     xt::pyarray<int> &sdInfo_hu_hu_rowptr =
         args.m_iarray["sdInfo_hu_hu_rowptr"];
@@ -1289,6 +1248,9 @@ public:
     xt::pyarray<double> &global_entropy_residual =
         args.m_darray["global_entropy_residual"];
     double dij_small = args.m_dscalar["dij_small"];
+    int if_relaxationZones = args.m_iscalar["if_relaxationZones"];
+    xt::pyarray<int> relaxationZone_NodeArray =
+        args.m_iarray["relaxation_NodeArray"];
     // FOR FRICTION//
     double n2 = std::pow(mannings, 2.);
     double gamma = 4. / 3;
@@ -1481,6 +1443,23 @@ public:
           new_SourceTerm_hv[i] = -friction_aux * hvi;
         }
 
+        // add relaxation zone sources only if i value is in nodeMaterialArray
+        if (if_relaxationZones == 1) {
+          if (std::any_of(relaxationZone_NodeArray.begin(),
+                          relaxationZone_NodeArray.end(), compare(i))) {
+            double x_loc = mesh_dof[3 * i];
+            calculateRelaxationZones(
+                hi, hui, hvi, hetai, hwi, 0.0, 0.0, 0.0, 0.0, 0.0,
+                extendedSourceTerm_hu[i], extendedSourceTerm_hu[i],
+                extendedSourceTerm_hv[i], extendedSourceTerm_heta[i],
+                extendedSourceTerm_hw[i], // this second new_SourceTerm_hu does
+                                          // nothing
+                new_SourceTerm_hu[i], new_SourceTerm_hu[i],
+                new_SourceTerm_hv[i], new_SourceTerm_heta[i],
+                new_SourceTerm_hw[i], x_loc, mi, std::sqrt(g * hEps / eps));
+          }
+        }
+
         // Define some things for heta, hw and hbeta sources
         double ratio_i = 1.0; //(2.0 * hetai) / (etai * etai + hi * hi + hEps);
         double diff_over_h_i = (hetai - hi * hi) * one_over_hiReg;
@@ -1635,6 +1614,7 @@ public:
                 alphai, POWER_SMOOTHNESS_INDICATOR); // NOTE: alpha^4 for mGN
         }
       }
+      // abort();
       // ********** END OF 2nd LOOP ON DOFS ********** //
 
       /////////////////////////////////////////////
@@ -2061,9 +2041,6 @@ public:
     xt::pyarray<double> &boundaryJac_ref = args.m_darray["boundaryJac_ref"];
     xt::pyarray<double> &elementDiameter = args.m_darray["elementDiameter"];
     int nElements_global = args.m_iscalar["nElements_global"];
-    double useRBLES = args.m_dscalar["useRBLES"];
-    double useMetrics = args.m_dscalar["useMetrics"];
-    double alphaBDF = args.m_dscalar["alphaBDF"];
     double g = args.m_dscalar["g"];
     xt::pyarray<int> &h_l2g = args.m_iarray["h_l2g"];
     xt::pyarray<int> &vel_l2g = args.m_iarray["vel_l2g"];
@@ -2074,12 +2051,6 @@ public:
     xt::pyarray<double> &heta_dof = args.m_darray["heta_dof"];
     xt::pyarray<double> &hw_dof = args.m_darray["hw_dof"];
     xt::pyarray<double> &hbeta_dof = args.m_darray["hbeta_dof"];
-    xt::pyarray<double> &q_mass_acc_beta_bdf =
-        args.m_darray["q_mass_acc_beta_bdf"];
-    xt::pyarray<double> &q_mom_hu_acc_beta_bdf =
-        args.m_darray["q_mom_hu_acc_beta_bdf"];
-    xt::pyarray<double> &q_mom_hv_acc_beta_bdf =
-        args.m_darray["q_mom_hv_acc_beta_bdf"];
     xt::pyarray<double> &q_cfl = args.m_darray["q_cfl"];
     xt::pyarray<int> &sdInfo_hu_hu_rowptr =
         args.m_iarray["sdInfo_hu_hu_rowptr"];
@@ -2424,9 +2395,6 @@ public:
     xt::pyarray<double> &boundaryJac_ref = args.m_darray["boundaryJac_ref"];
     xt::pyarray<double> &elementDiameter = args.m_darray["elementDiameter"];
     int nElements_global = args.m_iscalar["nElements_global"];
-    double useRBLES = args.m_dscalar["useRBLES"];
-    double useMetrics = args.m_dscalar["useMetrics"];
-    double alphaBDF = args.m_dscalar["alphaBDF"];
     double g = args.m_dscalar["g"];
     xt::pyarray<int> &h_l2g = args.m_iarray["h_l2g"];
     xt::pyarray<int> &vel_l2g = args.m_iarray["vel_l2g"];
@@ -2434,12 +2402,6 @@ public:
     xt::pyarray<double> &h_dof = args.m_darray["h_dof"];
     xt::pyarray<double> &hu_dof = args.m_darray["hu_dof"];
     xt::pyarray<double> &hv_dof = args.m_darray["hv_dof"];
-    xt::pyarray<double> &q_mass_acc_beta_bdf =
-        args.m_darray["q_mass_acc_beta_bdf"];
-    xt::pyarray<double> &q_mom_hu_acc_beta_bdf =
-        args.m_darray["q_mom_hu_acc_beta_bdf"];
-    xt::pyarray<double> &q_mom_hv_acc_beta_bdf =
-        args.m_darray["q_mom_hv_acc_beta_bdf"];
     xt::pyarray<double> &q_cfl = args.m_darray["q_cfl"];
     xt::pyarray<int> &sdInfo_hu_hu_rowptr =
         args.m_iarray["sdInfo_hu_hu_rowptr"];
