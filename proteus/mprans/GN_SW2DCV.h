@@ -1270,7 +1270,7 @@ public:
     double dij_small = args.scalar<double>("dij_small");
     int if_relaxationZones = args.scalar<int>("if_relaxationZones");
     xt::pyarray<int> relaxationZone_NodeArray =
-        args.array<int>["relaxation_NodeArray"];
+        args.array<int>("relaxation_NodeArray");
     // FOR FRICTION//
     double n2 = std::pow(mannings, 2.);
     double gamma = 4. / 3;
