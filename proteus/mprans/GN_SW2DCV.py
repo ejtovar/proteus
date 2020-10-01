@@ -631,12 +631,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         # To compute edge_based_cfl from within choose_dt of RKEV
         self.edge_based_cfl = np.zeros(self.u[0].dof.shape)
         self.dLow = None
-        self.hBT = None
-        self.huBT = None
-        self.hvBT = None
-        self.hetaBT = None
-        self.hwBT = None
-        self.hbetaBT = None
         # Old DOFs
         # NOTE (Mql): It is important to link h_dof_old by reference with u[0].dof (and so on).
         # This is because  I need the initial condition to be passed to them as well (before calling calculateResidual).
@@ -813,7 +807,21 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         # Global C Matrices (mql)
         self.cterm_global = None
         self.cterm_transpose_global = None
-        # For FCT
+        # For convex limiting
+        self.dH_minus_dL = None
+        self.muH_minus_muL = None
+        self.size_of_domain = None
+        self.hLow = None
+        self.huLow = None
+        self.hvLow = None
+        self.hetaLow = None
+        self.hwLow = None
+        self.hbetaLow = None
+        self.h_min = None
+        self.h_max = None
+        self.heta_min = None
+        self.heta_max = None
+        self.kin_max = None
         self.extendedSourceTerm_hu = None
         self.extendedSourceTerm_hv = None
         self.extendedSourceTerm_heta = None
@@ -826,10 +834,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         # for EV
         self.dij_small = None
         self.global_entropy_residual = None
-
-        self.dH_minus_dL = None
-        self.muH_minus_muL = None
-        self.size_of_domain = None  # for relaxation of bounds
         # NORMALS
         self.COMPUTE_NORMALS = 1
         self.normalx = None
@@ -1037,17 +1041,21 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["hEps"] = self.hEps
         argsDict["LUMPED_MASS_MATRIX"] = self.coefficients.LUMPED_MASS_MATRIX
         argsDict["dLow"] = self.dLow
-        argsDict["hBT"] = self.hBT
-        argsDict["huBT"] = self.huBT
-        argsDict["hvBT"] = self.hvBT
-        argsDict["hetaBT"] = self.hetaBT
-        argsDict["hwBT"] = self.hwBT
-        argsDict["hbetaBT"] = self.hbetaBT
         argsDict["new_SourceTerm_hu"] = self.new_SourceTerm_hu
         argsDict["new_SourceTerm_hv"] = self.new_SourceTerm_hv
         argsDict["new_SourceTerm_heta"] = self.new_SourceTerm_heta
         argsDict["new_SourceTerm_hw"] = self.new_SourceTerm_hw
-        argsDict["size_of_domain"] = self.size_of_domain
+        argsDict["hLow"] = self.hLow
+        argsDict["huLow"] = self.huLow
+        argsDict["hvLow"] = self.hvLow
+        argsDict["hetaLow"] = self.hetaLow
+        argsDict["hwLow"] = self.hwLow
+        argsDict["hbetaLow"] = self.hbetaLow
+        argsDict["h_min"] = self.h_min
+        argsDict["h_max"] = self.h_max
+        argsDict["heta_min"] = self.heta_min
+        argsDict["heta_max"] = self.heta_max
+        argsDict["kin_max"] = self.kin_max
         self.dsw_2d.convexLimiting(argsDict)
 
         # Pass the post processed hnp1 solution to global solution u
@@ -1361,17 +1369,22 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         # boundary Index: I do this in preStep since I need normalx and normaly to be initialized first
         # Allocate space for dLow (for the first stage in the SSP method)
         self.dLow = np.zeros(self.Cx.shape, 'd')
-        self.hBT = np.zeros(self.Cx.shape, 'd')
-        self.huBT = np.zeros(self.Cx.shape, 'd')
-        self.hvBT = np.zeros(self.Cx.shape, 'd')
-        self.hetaBT = np.zeros(self.Cx.shape, 'd')
-        self.hwBT = np.zeros(self.Cx.shape, 'd')
-        self.hbetaBT = np.zeros(self.Cx.shape, 'd')
         # get coordinates of DOFs
         self.getDOFsCoord()
         # some vectors for convex limiting
         self.dH_minus_dL = np.zeros(self.Cx.shape, 'd')
         self.muH_minus_muL = np.zeros(self.Cx.shape, 'd')
+        self.hLow = np.zeros(self.u[0].dof.shape, 'd')
+        self.huLow = np.zeros(self.u[0].dof.shape, 'd')
+        self.hvLow = np.zeros(self.u[0].dof.shape, 'd')
+        self.hetaLow = np.zeros(self.u[0].dof.shape, 'd')
+        self.hwLow = np.zeros(self.u[0].dof.shape, 'd')
+        self.hbetaLow = np.zeros(self.u[0].dof.shape, 'd')
+        self.h_min = np.zeros(self.u[0].dof.shape, 'd')
+        self.h_max = np.zeros(self.u[0].dof.shape, 'd')
+        self.heta_min = np.zeros(self.u[0].dof.shape, 'd')
+        self.heta_max = np.zeros(self.u[0].dof.shape, 'd')
+        self.kin_max = np.zeros(self.u[0].dof.shape, 'd')
         self.extendedSourceTerm_hu = np.zeros(self.u[0].dof.shape, 'd')
         self.extendedSourceTerm_hv = np.zeros(self.u[0].dof.shape, 'd')
         self.extendedSourceTerm_heta = np.zeros(self.u[0].dof.shape, 'd')
@@ -1389,6 +1402,51 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         N=self.u[0].femSpace.dofMap.nDOF_all_processes
         nghosts = self.u[0].par_dof.nghosts
         subdomain2global=self.u[0].femSpace.dofMap.subdomain2global
+        #
+        self.par_hLow = LAT.ParVec_petsc4py(self.hLow,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_huLow = LAT.ParVec_petsc4py(self.huLow,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_hvLow = LAT.ParVec_petsc4py(self.hvLow,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_hetaLow = LAT.ParVec_petsc4py(self.hetaLow,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_hwLow = LAT.ParVec_petsc4py(self.hwLow,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_hbetaLow = LAT.ParVec_petsc4py(self.hbetaLow,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_h_min = LAT.ParVec_petsc4py(self.h_min,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_h_max = LAT.ParVec_petsc4py(self.h_max,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_heta_min = LAT.ParVec_petsc4py(self.heta_min,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_heta_max = LAT.ParVec_petsc4py(self.heta_max,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_kin_max = LAT.ParVec_petsc4py(self.kin_max,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
         #
         self.par_extendedSourceTerm_hu = LAT.ParVec_petsc4py(self.extendedSourceTerm_hu,
                                                 bs=1,
@@ -1426,10 +1484,12 @@ class LevelModel(proteus.Transport.OneLevelTransport):
                                                 bs=1,
                                                 n=n,N=N,nghosts=nghosts,
                                                 subdomain2global=subdomain2global)
+        #
         self.par_global_entropy_residual = LAT.ParVec_petsc4py(self.global_entropy_residual,
                                                 bs=1,
                                                 n=n,N=N,nghosts=nghosts,
                                                 subdomain2global=subdomain2global)
+        #
         self.par_normalx = LAT.ParVec_petsc4py(self.normalx,
                                                 bs=1,
                                                 n=n,N=N,nghosts=nghosts,
@@ -1604,7 +1664,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["cfl_run"] = self.timeIntegration.runCFL
         argsDict["eps"] = self.eps
         argsDict["hEps"] = self.hEps
-        argsDict["hReg"] = self.hReg
         argsDict["hnp1_at_quad_point"] = self.q[('u', 0)]
         argsDict["hunp1_at_quad_point"] = self.q[('u', 1)]
         argsDict["hvnp1_at_quad_point"] = self.q[('u', 2)]
@@ -1629,12 +1688,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["normalx"] = self.normalx
         argsDict["normaly"] = self.normaly
         argsDict["dLow"] = self.dLow
-        argsDict["hBT"] = self.hBT
-        argsDict["huBT"] = self.huBT
-        argsDict["hvBT"] = self.hvBT
-        argsDict["hetaBT"] = self.hetaBT
-        argsDict["hwBT"] = self.hwBT
-        argsDict["hbetaBT"] = self.hbetaBT
         argsDict["lstage"] = self.timeIntegration.lstage
         argsDict["new_SourceTerm_hu"] = self.new_SourceTerm_hu
         argsDict["new_SourceTerm_hv"] = self.new_SourceTerm_hv
@@ -1642,12 +1695,37 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["new_SourceTerm_hw"] = self.new_SourceTerm_hw
         argsDict["global_entropy_residual"] = self.global_entropy_residual
         argsDict["dij_small"] = self.dij_small
+        argsDict["hLow"] = self.hLow
+        argsDict["huLow"] = self.huLow
+        argsDict["hvLow"] = self.hvLow
+        argsDict["hetaLow"] = self.hetaLow
+        argsDict["hwLow"] = self.hwLow
+        argsDict["hbetaLow"] = self.hbetaLow
+        argsDict["h_min"] = self.h_min
+        argsDict["h_max"] = self.h_max
+        argsDict["heta_min"] = self.heta_min
+        argsDict["heta_max"] = self.heta_max
+        argsDict["kin_max"] = self.kin_max
+        argsDict["size_of_domain"] = self.size_of_domain
         argsDict["if_relaxationZones"] = self.if_relaxationZones
         argsDict["relaxation_NodeArray"] = self.relaxationZone_nodeIndex
 
         # call calculate residual
         self.par_global_entropy_residual.scatter_forward_insert()
         self.calculateResidual(argsDict)
+
+        # distribute local bounds and low order solutions (with bar states)
+        self.par_hLow.scatter_forward_insert()
+        self.par_huLow.scatter_forward_insert()
+        self.par_hvLow.scatter_forward_insert()
+        self.par_hetaLow.scatter_forward_insert()
+        self.par_hwLow.scatter_forward_insert()
+        self.par_hbetaLow.scatter_forward_insert()
+        self.par_h_min.scatter_forward_insert()
+        self.par_h_max.scatter_forward_insert()
+        self.par_heta_min.scatter_forward_insert()
+        self.par_heta_max.scatter_forward_insert()
+        self.par_kin_max.scatter_forward_insert()
 
         # distribute source terms (not sure if needed)
         self.par_extendedSourceTerm_hu.scatter_forward_insert()

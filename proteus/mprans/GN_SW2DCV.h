@@ -143,8 +143,6 @@ inline void calculateRelaxationZones(
 namespace proteus {
 class GN_SW2DCV_base {
 public:
-  std::valarray<double> Rneg, Rpos, Rneg_heta, Rpos_heta, hLow, huLow, hvLow,
-      hetaLow, hwLow, hbetaLow, Kmax;
   virtual ~GN_SW2DCV_base() {}
   virtual void convexLimiting(arguments_dict &args) = 0;
   virtual double calculateEdgeBasedCFL(arguments_dict &args) = 0;
@@ -274,12 +272,6 @@ public:
     double hEps = args.scalar<double>("hEps");
     int LUMPED_MASS_MATRIX = args.scalar<int>("LUMPED_MASS_MATRIX");
     xt::pyarray<double> &dLow = args.array<double>("dLow");
-    xt::pyarray<double> &hBT = args.array<double>("hBT");
-    xt::pyarray<double> &huBT = args.array<double>("huBT");
-    xt::pyarray<double> &hvBT = args.array<double>("hvBT");
-    xt::pyarray<double> &hetaBT = args.array<double>("hetaBT");
-    xt::pyarray<double> &hwBT = args.array<double>("hwBT");
-    xt::pyarray<double> &hbetaBT = args.array<double>("hbetaBT");
     xt::pyarray<double> &new_SourceTerm_hu =
         args.array<double>("new_SourceTerm_hu");
     xt::pyarray<double> &new_SourceTerm_hv =
@@ -288,184 +280,32 @@ public:
         args.array<double>("new_SourceTerm_heta");
     xt::pyarray<double> &new_SourceTerm_hw =
         args.array<double>("new_SourceTerm_hw");
-    double size_of_domain = args.scalar<double>("size_of_domain");
-    Rneg.resize(numDOFs, 0.0);
-    Rpos.resize(numDOFs, 0.0);
-    Rneg_heta.resize(numDOFs, 0.0);
-    Rpos_heta.resize(numDOFs, 0.0);
-    hLow.resize(numDOFs, 0.0);
-    huLow.resize(numDOFs, 0.0);
-    hvLow.resize(numDOFs, 0.0);
-    hetaLow.resize(numDOFs, 0.0);
-    hwLow.resize(numDOFs, 0.0);
-    hbetaLow.resize(numDOFs, 0.0);
-    Kmax.resize(numDOFs, 0.0);
+    xt::pyarray<double> &hLow = args.array<double>("hLow");
+    xt::pyarray<double> &huLow = args.array<double>("huLow");
+    xt::pyarray<double> &hvLow = args.array<double>("hvLow");
+    xt::pyarray<double> &hetaLow = args.array<double>("hetaLow");
+    xt::pyarray<double> &hwLow = args.array<double>("hwLow");
+    xt::pyarray<double> &hbetaLow = args.array<double>("hbetaLow");
+    xt::pyarray<double> &h_min = args.array<double>("h_min");
+    xt::pyarray<double> &h_max = args.array<double>("h_max");
+    xt::pyarray<double> &heta_min = args.array<double>("heta_min");
+    xt::pyarray<double> &heta_max = args.array<double>("heta_max");
+    xt::pyarray<double> &kin_max = args.array<double>("kin_max");
 
-    // for relaxation of bounds
-    std::valarray<double> urelax(0.0, numDOFs);
-    std::valarray<double> drelax(0.0, numDOFs);
-
-    // for h
-    std::valarray<double> h_min(0.0, numDOFs);
-    std::valarray<double> h_max(0.0, numDOFs);
-    std::valarray<double> delta_Sqd_h(0.0, numDOFs);
-    std::valarray<double> bar_deltaSqd_h(0.0, numDOFs);
-
-    // for heta
-    std::valarray<double> heta_min(0.0, numDOFs);
-    std::valarray<double> heta_max(0.0, numDOFs);
-    std::valarray<double> delta_Sqd_heta(0.0, numDOFs);
-    std::valarray<double> bar_deltaSqd_heta(0.0, numDOFs);
-
-    // for kinetic energy
-    xt::pyarray<double> kin(numDOFs);
-    xt::pyarray<double> max_of_h_and_hEps(numDOFs);
-    std::valarray<double> kin_max(0.0, numDOFs);
-    std::valarray<double> delta_Sqd_kin(0.0, numDOFs);
-    std::valarray<double> bar_deltaSqd_kin(0.0, numDOFs);
+    // Declare stuff for limiting on h and h*heta
+    std::valarray<double> Rneg(0.0, numDOFs), Rpos(0.0, numDOFs),
+        Rneg_heta(0.0, numDOFs), Rpos_heta(0.0, numDOFs);
 
     // Create FCT component matrices in vector form
-    std::valarray<double> FCT_h(0.0, dH_minus_dL.size());
-    std::valarray<double> FCT_hu(0.0, dH_minus_dL.size());
-    std::valarray<double> FCT_hv(0.0, dH_minus_dL.size());
-    std::valarray<double> FCT_heta(0.0, dH_minus_dL.size());
-    std::valarray<double> FCT_hw(0.0, dH_minus_dL.size());
-    std::valarray<double> FCT_hbeta(0.0, dH_minus_dL.size());
-
-    // Define kinetic energy, kin = 1/2 q^2 / h
-    max_of_h_and_hEps = xt::where(h_old > hEps, h_old, hEps);
-    kin = 0.5 * (hu_old * hu_old + hv_old * hv_old);
-    kin *=
-        2.0 * h_old / (h_old * h_old + max_of_h_and_hEps * max_of_h_and_hEps);
-
-    // We first do the loops to define the relaxation quantities
-    // First relaxation loop
-    for (int i = 0; i < numDOFs; i++) {
-      urelax[i] =
-          1.0 +
-          2.0 * std::pow(sqrt(sqrt(lumped_mass_matrix[i] / size_of_domain)), 3);
-      drelax[i] =
-          1.0 -
-          2.0 * std::pow(sqrt(sqrt(lumped_mass_matrix[i] / size_of_domain)), 3);
-      for (int offset = csrRowIndeces_DofLoops[i];
-           offset < csrRowIndeces_DofLoops[i + 1]; offset++) {
-        int j = csrColumnOffsets_DofLoops[offset];
-        if (i != j) {
-          delta_Sqd_h[i] += h_old[i] - h_old[j];
-          delta_Sqd_heta[i] += heta_old[i] - heta_old[j];
-          delta_Sqd_kin[i] += kin[i] - kin[j];
-        }
-      } // j loop ends here
-    }   // i loops ends here
-
-    // Second relaxation loop
-    for (int i = 0; i < numDOFs; i++) {
-      for (int offset = csrRowIndeces_DofLoops[i];
-           offset < csrRowIndeces_DofLoops[i + 1]; offset++) {
-        int j = csrColumnOffsets_DofLoops[offset];
-        if (i != j) {
-          bar_deltaSqd_h[i] += delta_Sqd_h[j] + delta_Sqd_h[i];
-          bar_deltaSqd_heta[i] += delta_Sqd_heta[j] + delta_Sqd_heta[i];
-          bar_deltaSqd_kin[i] += delta_Sqd_kin[j] + delta_Sqd_kin[i];
-        }
-      } // j loop ends here
-      bar_deltaSqd_h[i] =
-          bar_deltaSqd_h[i] /
-          (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i]) / 2.0;
-      bar_deltaSqd_heta[i] =
-          bar_deltaSqd_heta[i] /
-          (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i]) / 2.0;
-      bar_deltaSqd_kin[i] =
-          bar_deltaSqd_kin[i] /
-          (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i]) / 2.0;
-    } // i loops ends here
-
-    ////////////////////////////////////////////////////////
-    // Loop to define local bounds and low order solution //
-    ////////////////////////////////////////////////////////
-    int ij = 0;
-    for (int i = 0; i < numDOFs; i++) {
-
-      // define m_i
-      double mi = lumped_mass_matrix[i];
-
-      /* Initialize hmin, hmax, heta_min, heta_max */
-      h_min[i] = h_old[i];
-      h_max[i] = h_old[i];
-      heta_min[i] = heta_old[i];
-      heta_max[i] = heta_old[i];
-
-      /* Initialize low order solution */
-      hLow[i] = h_old[i];
-      huLow[i] = hu_old[i];
-      hvLow[i] = hv_old[i];
-      hetaLow[i] = heta_old[i];
-      hwLow[i] = hw_old[i];
-      hbetaLow[i] = hbeta_old[i];
-      Kmax[i] = kin[i];
-
-      /* LOOP OVER THE SPARSITY PATTERN (j-LOOP) */
-      for (int offset = csrRowIndeces_DofLoops[i];
-           offset < csrRowIndeces_DofLoops[i + 1]; offset++) {
-        int j = csrColumnOffsets_DofLoops[offset];
-        double psi_ij = 0;
-        double one_over_hBT =
-            2.0 * hBT[ij] /
-            (hBT[ij] * hBT[ij] + std::pow(fmax(hBT[ij], hEps), 2));
-        psi_ij = one_over_hBT * (huBT[ij] * huBT[ij] + hvBT[ij] * hvBT[ij]) /
-                 2.0; // Eqn (6.31)
-
-        // COMPUTE LOCAL BOUNDS //
-        Kmax[i] = fmax(psi_ij, Kmax[i]);
-        h_min[i] = std::min(h_min[i], hBT[ij]);
-        h_max[i] = std::max(h_max[i], hBT[ij]);
-        heta_min[i] = std::min(heta_min[i], hetaBT[ij]);
-        heta_max[i] = std::max(heta_max[i], hetaBT[ij]);
-
-        // Then do relaxation of bounds here. If confused, see (4.12) of Euler
-        // convex limiting paper.
-        Kmax[i] = std::min(urelax[i] * Kmax[i],
-                           Kmax[i] + std::abs(bar_deltaSqd_kin[i]) / 2.0);
-        h_min[i] = std::max(drelax[i] * h_min[i],
-                            h_min[i] - std::abs(bar_deltaSqd_h[i]) / 2.0);
-        h_max[i] = std::min(urelax[i] * h_max[i],
-                            h_max[i] + std::abs(bar_deltaSqd_h[i]) / 2.0);
-        heta_min[i] =
-            std::max(drelax[i] * heta_min[i],
-                     heta_min[i] - std::abs(bar_deltaSqd_heta[i]) / 2.0);
-        heta_max[i] =
-            std::min(urelax[i] * heta_max[i],
-                     heta_max[i] + std::abs(bar_deltaSqd_heta[i]) / 2.0);
-
-        /* COMPUTE LOW ORDER SOLUTION. See EQN 6.23 in SW friction paper */
-        // This is low order solution WITHOUT sources
-        if (i != j) {
-          hLow[i] += h_old[i] * (-dt / mi * 2 * dLow[ij]) +
-                     dt / mi * (2 * dLow[ij] * hBT[ij]);
-          huLow[i] += hu_old[i] * (-dt / mi * 2 * dLow[ij]) +
-                      dt / mi * (2 * dLow[ij] * huBT[ij]);
-          hvLow[i] += hv_old[i] * (-dt / mi * 2 * dLow[ij]) +
-                      dt / mi * (2 * dLow[ij] * hvBT[ij]);
-          hetaLow[i] += heta_old[i] * (-dt / mi * 2 * dLow[ij]) +
-                        dt / mi * (2 * dLow[ij] * hetaBT[ij]);
-          hwLow[i] += hw_old[i] * (-dt / mi * 2 * dLow[ij]) +
-                      dt / mi * (2 * dLow[ij] * hwBT[ij]);
-          hbetaLow[i] += hbeta_old[i] * (-dt / mi * 2 * dLow[ij]) +
-                         dt / mi * (2 * dLow[ij] * hbetaBT[ij]);
-        }
-        // UPDATE ij //
-        ij += 1;
-      } // j loop ends here
-
-      // clean up hLow from round off error
-      if (hLow[i] < hEps)
-        hLow[i] = 0.0;
-    } // i loop ends here
+    std::valarray<double> FCT_h(0.0, dH_minus_dL.size()),
+        FCT_hu(0.0, dH_minus_dL.size()), FCT_hv(0.0, dH_minus_dL.size()),
+        FCT_heta(0.0, dH_minus_dL.size()), FCT_hw(0.0, dH_minus_dL.size()),
+        FCT_hbeta(0.0, dH_minus_dL.size());
 
     ////////////////////////////////////////////////////
     // Loop to define FCT matrices for each component //
     ////////////////////////////////////////////////////
-    ij = 0;
+    int ij = 0;
     for (int i = 0; i < numDOFs; i++) {
       // read some vectors
       double high_order_hnp1i = high_order_hnp1[i];
@@ -502,8 +342,7 @@ public:
         double one_over_hjReg =
             2. * hj / (hj * hj + std::pow(fmax(hj, hEps), 2)); // hEps
 
-        // COMPUTE STAR SOLUTION // hStar, huStar, hvStar, hetaStar, and
-        // hwStar, hbetaStar
+        // Compute star states
         double hStarij = fmax(0., hi + Zi - fmax(Zi, Zj));
         double huStarij = huni * hStarij * one_over_hiReg;
         double hvStarij = hvni * hStarij * one_over_hiReg;
@@ -557,8 +396,10 @@ public:
                         dt * (dH_minus_dL[ij] - muH_minus_muL[ij]) *
                             (hbetaStarji - hbetaStarij) +
                         dt * muH_minus_muL[ij] * (hbetanj - hbetani);
+
         // UPDATE ij //
         ij += 1;
+
       } // j loop ends here
     }   // i loop ends here
 
@@ -581,20 +422,21 @@ public:
         double Pnegi = 0., Pposi = 0.;
         double Pnegi_heta = 0., Pposi_heta = 0.;
 
-        // LOOP OVER THE SPARSITY PATTERN (j-LOOP)//
+        // LOOP OVER THE SPARSITY PATTERN (j-LOOP)
         for (int offset = csrRowIndeces_DofLoops[i];
              offset < csrRowIndeces_DofLoops[i + 1]; offset++) {
 
           int j = csrColumnOffsets_DofLoops[offset];
 
-          // COMPUTE P VECTORS //
+          // COMPUTE P VECTORS
           Pnegi += FCT_h[ij] * ((FCT_h[ij] < 0) ? 1. : 0.);
           Pposi += FCT_h[ij] * ((FCT_h[ij] > 0) ? 1. : 0.);
           Pnegi_heta += FCT_heta[ij] * ((FCT_heta[ij] < 0) ? 1. : 0.);
           Pposi_heta += FCT_heta[ij] * ((FCT_heta[ij] > 0) ? 1. : 0.);
 
-          // UPDATE ij //
+          // UPDATE ij
           ij += 1;
+
         } // j loop ends here
 
         ///////////////////////
@@ -653,7 +495,7 @@ public:
         double ith_Limiter_times_FluxCorrectionMatrix6 = 0.;
 
         double ci =
-            Kmax[i] * hLow[i] -
+            kin_max[i] * hLow[i] -
             0.5 * (huLow[i] * huLow[i] + hvLow[i] * hvLow[i]); // for KE lim.
 
         // LOOP OVER THE SPARSITY PATTERN (j-LOOP)//
@@ -711,7 +553,8 @@ public:
           double Phv_ij = FCT_hv[ij] / mi / lambdaj;
 
           double ai = -0.5 * (Phu_ij * Phu_ij + Phv_ij * Phv_ij);
-          double bi = Kmax[i] * Ph_ij - (huLow[i] * Phu_ij + hvLow[i] * Phv_ij);
+          double bi =
+              kin_max[i] * Ph_ij - (huLow[i] * Phu_ij + hvLow[i] * Phv_ij);
 
           double r1 = ai == 0
                           ? (bi == 0 ? 1. : -ci / bi)
@@ -729,13 +572,14 @@ public:
           double lambdai =
               csrRowIndeces_DofLoops[j + 1] - csrRowIndeces_DofLoops[j] - 1;
           double mj = lumped_mass_matrix[j];
-          double cj = Kmax[j] * hLow[j] -
+          double cj = kin_max[j] * hLow[j] -
                       0.5 * (huLow[j] * huLow[j] + hvLow[j] * hvLow[j]);
           double Ph_ji = -FCT_h[ij] / mj / lambdai; // Aij=-Aji
           double Phu_ji = -FCT_hu[ij] / mj / lambdai;
           double Phv_ji = -FCT_hv[ij] / mj / lambdai;
           double aj = -0.5 * (Phu_ji * Phu_ji + Phv_ji * Phv_ji);
-          double bj = Kmax[j] * Ph_ji - (huLow[j] * Phu_ji + hvLow[j] * Phv_ji);
+          double bj =
+              kin_max[j] * Ph_ji - (huLow[j] * Phu_ji + hvLow[j] * Phv_ji);
 
           r1 = aj == 0 ? (bj == 0 ? 1. : -cj / bj)
                        : (-bj + std::sqrt(bj * bj - 4 * aj * cj)) / 2. / aj;
@@ -763,9 +607,10 @@ public:
 
           // update ij
           ij += 1;
-        }
 
-        // update ulow solution
+        } // end j loop
+
+        // update ulow solution (which is passed in from function call)
         double one_over_mi = 1.0 / lumped_mass_matrix[i];
         hLow[i] += one_over_mi * ith_Limiter_times_FluxCorrectionMatrix1;
         huLow[i] += one_over_mi * ith_Limiter_times_FluxCorrectionMatrix2;
@@ -775,7 +620,50 @@ public:
         hbetaLow[i] += one_over_mi * ith_Limiter_times_FluxCorrectionMatrix6;
       } // end i loop for computing limiter and sum_j(lij * Aij)
 
-      // update final limted solution, need to change to vector form
+      // update final limted solution
+      // limited_hnp1 = hLow;
+      // limited_hunp1 = huLow + dt * 1.0 / lumped_mass_matrix *
+      // new_SourceTerm_hu; limited_hvnp1 = hvLow + dt * 1.0 /
+      // lumped_mass_matrix * new_SourceTerm_hv; limited_hetanp1 =
+      //     hetaLow - dt * 1.0 / lumped_mass_matrix * extendedSourceTerm_heta;
+      // limited_hwnp1 =
+      //     hwLow - dt * 1.0 / lumped_mass_matrix * extendedSourceTerm_hw;
+      // limited_hbetanp1 =
+      //     hbetaLow - dt * 1.0 / lumped_mass_matrix *
+      //     extendedSourceTerm_hbeta;
+      //
+      // if (xt::any(xt::less(limited_hnp1, -hEps)) && dt < 1.0) {
+      //   std::cout << "Limited water height is negative: \n "
+      //             << "hLow: " << hLow[xt::less(limited_hnp1, -hEps)] << "\n"
+      //             << "hHigh: " << limited_hnp1[xt::less(limited_hnp1, -hEps)]
+      //             << "\n"
+      //             << "hEps:  " << hEps << "\n"
+      //             << " ... aborting!" << std::endl;
+      //   abort();
+      // } else {
+      //   // clean up uHigh from round off error
+      //   limited_hnp1 = xt::where(limited_hnp1 > hEps, limited_hnp1, 0.0);
+      //   limited_hetanp1 = xt::where(limited_hnp1 > hEps, limited_hetanp1,
+      //   0.0);
+      //
+      //   // define aux is an array
+      //   xt::pyarray<double> aux =
+      //       xt::where(limited_hnp1 > hEps, limited_hnp1, hEps);
+      //
+      //   limited_hunp1 *= 2 * xt::pow(limited_hnp1, VEL_FIX_POWER) /
+      //                    (xt::pow(limited_hnp1, VEL_FIX_POWER) +
+      //                     xt::pow(aux, VEL_FIX_POWER));
+      //   limited_hvnp1 *= 2 * xt::pow(limited_hnp1, VEL_FIX_POWER) /
+      //                    (xt::pow(limited_hnp1, VEL_FIX_POWER) +
+      //                     xt::pow(aux, VEL_FIX_POWER));
+      //   limited_hwnp1 *= 2 * xt::pow(limited_hnp1, VEL_FIX_POWER) /
+      //                    (xt::pow(limited_hnp1, VEL_FIX_POWER) +
+      //                     xt::pow(aux, VEL_FIX_POWER));
+      //   limited_hbetanp1 *= 2 * xt::pow(limited_hnp1, VEL_FIX_POWER) /
+      //                       (xt::pow(limited_hnp1, VEL_FIX_POWER) +
+      //                        xt::pow(aux, VEL_FIX_POWER));
+      // }
+
       for (int i = 0; i < numDOFs; i++) {
         double one_over_mi = 1.0 / lumped_mass_matrix[i];
         limited_hnp1[i] = hLow[i];
@@ -1213,7 +1101,6 @@ public:
     double cfl_run = args.scalar<double>("cfl_run");
     double eps = args.scalar<double>("eps");
     double hEps = args.scalar<double>("hEps");
-    xt::pyarray<double> &hReg = args.array<double>("hReg");
     xt::pyarray<double> &hnp1_at_quad_point =
         args.array<double>("hnp1_at_quad_point");
     xt::pyarray<double> &hunp1_at_quad_point =
@@ -1250,12 +1137,6 @@ public:
     xt::pyarray<double> &normalx = args.array<double>("normalx");
     xt::pyarray<double> &normaly = args.array<double>("normaly");
     xt::pyarray<double> &dLow = args.array<double>("dLow");
-    xt::pyarray<double> &hBT = args.array<double>("hBT");
-    xt::pyarray<double> &huBT = args.array<double>("huBT");
-    xt::pyarray<double> &hvBT = args.array<double>("hvBT");
-    xt::pyarray<double> &hetaBT = args.array<double>("hetaBT");
-    xt::pyarray<double> &hwBT = args.array<double>("hwBT");
-    xt::pyarray<double> &hbetaBT = args.array<double>("hbetaBT");
     int lstage = args.scalar<int>("lstage");
     xt::pyarray<double> &new_SourceTerm_hu =
         args.array<double>("new_SourceTerm_hu");
@@ -1268,6 +1149,18 @@ public:
     xt::pyarray<double> &global_entropy_residual =
         args.array<double>("global_entropy_residual");
     double dij_small = args.scalar<double>("dij_small");
+    xt::pyarray<double> &hLow = args.array<double>("hLow");
+    xt::pyarray<double> &huLow = args.array<double>("huLow");
+    xt::pyarray<double> &hvLow = args.array<double>("hvLow");
+    xt::pyarray<double> &hetaLow = args.array<double>("hetaLow");
+    xt::pyarray<double> &hwLow = args.array<double>("hwLow");
+    xt::pyarray<double> &hbetaLow = args.array<double>("hbetaLow");
+    xt::pyarray<double> &h_min = args.array<double>("h_min");
+    xt::pyarray<double> &h_max = args.array<double>("h_max");
+    xt::pyarray<double> &heta_min = args.array<double>("heta_min");
+    xt::pyarray<double> &heta_max = args.array<double>("heta_max");
+    xt::pyarray<double> &kin_max = args.array<double>("kin_max");
+    double size_of_domain = args.scalar<double>("size_of_domain");
     int if_relaxationZones = args.scalar<int>("if_relaxationZones");
     xt::pyarray<int> relaxationZone_NodeArray =
         args.array<int>("relaxation_NodeArray");
@@ -1311,7 +1204,8 @@ public:
         register double h = 0.0, hu = 0.0, hv = 0.0, heta = 0.0, hw = 0.0,
                         hbeta = 0.0, // solution at current time
             h_old = 0.0, hu_old = 0.0, hv_old = 0.0, heta_old = 0.0,
-                        hw_old = 0.0, hbeta_old = 0.0, // solution at lstage
+                        hw_old = 0.0,
+                        hbeta_old = 0.0, // solution at lstage
             jac[nSpace * nSpace], jacDet, jacInv[nSpace * nSpace],
                         h_test_dV[nDOF_trial_element], dV, x, y, xt, yt;
         // get jacobian, etc for mapping reference element
@@ -1398,16 +1292,364 @@ public:
 
     if (SECOND_CALL_CALCULATE_RESIDUAL == 0) // This is to save some time
     {
+      /////////////////////////////////////////////////////
+      // ********** FIRST SET OF LOOP ON DOFs ********** //
+      /////////////////////////////////////////////////////
+      // To compute:
+      //     * Local bounds for limiting
+      //     * Low order solution (in terms of bar states)
 
-      ///////////////////////////////////////////////
-      // ********** FIRST LOOP ON DOFs ********** //
-      ///////////////////////////////////////////////
+      // Here we declare the arrays for local bounds
+      // xt::pyarray<double> urelax(numDOFsPerEqn), drelax(numDOFsPerEqn);
+      // xt::pyarray<double> delta_Sqd_h(numDOFsPerEqn),
+      //     bar_deltaSqd_h(numDOFsPerEqn), delta_Sqd_heta(numDOFsPerEqn),
+      //     bar_deltaSqd_heta(numDOFsPerEqn), delta_Sqd_kin(numDOFsPerEqn),
+      //     bar_deltaSqd_kin(numDOFsPerEqn);
+      std::valarray<double> urelax(0.0, numDOFsPerEqn),
+          drelax(0.0, numDOFsPerEqn);
+      std::valarray<double> delta_Sqd_h(0.0, numDOFsPerEqn),
+          bar_deltaSqd_h(0.0, numDOFsPerEqn),
+          delta_Sqd_heta(0.0, numDOFsPerEqn),
+          bar_deltaSqd_heta(0.0, numDOFsPerEqn),
+          delta_Sqd_kin(0.0, numDOFsPerEqn),
+          bar_deltaSqd_kin(0.0, numDOFsPerEqn);
+      xt::pyarray<double> kin(numDOFsPerEqn), max_of_h_and_hEps(numDOFsPerEqn);
+
+      // Define kinetic energy, kin = 1/2 q^2 / h
+      max_of_h_and_hEps = xt::where(h_dof_old > hEps, h_dof_old, hEps);
+      kin = 0.5 * (hu_dof_old * hu_dof_old + hv_dof_old * hv_dof_old);
+      kin *= 2.0 * h_dof_old /
+             (h_dof_old * h_dof_old + max_of_h_and_hEps * max_of_h_and_hEps);
+
+      /* First loop to define: urelax, drelax, delta_Sqd_h, delta_Sqd_heta,
+       * delta_Sqd_kin */
+      for (int i = 0; i < numDOFsPerEqn; i++) {
+        urelax[i] =
+            1.0 +
+            2.0 *
+                std::pow(sqrt(sqrt(lumped_mass_matrix[i] / size_of_domain)), 3);
+        drelax[i] =
+            1.0 -
+            2.0 *
+                std::pow(sqrt(sqrt(lumped_mass_matrix[i] / size_of_domain)), 3);
+        for (int offset = csrRowIndeces_DofLoops[i];
+             offset < csrRowIndeces_DofLoops[i + 1]; offset++) {
+          int j = csrColumnOffsets_DofLoops[offset];
+          if (i != j) {
+            delta_Sqd_h[i] += h_dof_old[i] - h_dof_old[j];
+            delta_Sqd_heta[i] += heta_dof_old[i] - heta_dof_old[j];
+            delta_Sqd_kin[i] += kin[i] - kin[j];
+          }
+        } // j loop ends here
+      }   // i loops ends here
+
+      // Stuff for bar states here (BT = BarTilde)
+      std::valarray<double> hBT(0.0, dH_minus_dL.size()),
+          huBT(0.0, dH_minus_dL.size()), hvBT(0.0, dH_minus_dL.size()),
+          hetaBT(0.0, dH_minus_dL.size()), hwBT(0.0, dH_minus_dL.size()),
+          hbetaBT(0.0, dH_minus_dL.size());
+
+      /* Second loop to compute bar states (variable)BT */
+      int ij = 0;
+      for (int i = 0; i < numDOFsPerEqn; i++) {
+
+        // define things at ith node
+        double hi = h_dof_old[i];
+        double hui = hu_dof_old[i];
+        double hvi = hv_dof_old[i];
+        double hetai = heta_dof_old[i];
+        double hwi = hw_dof_old[i];
+        double hbetai = hbeta_dof_old[i];
+        double Zi = b_dof[i];
+        double mi = lumped_mass_matrix[i];
+        double one_over_hiReg =
+            2.0 * hi / (hi * hi + std::pow(fmax(hi, hEps), 2));
+        double ui = hui * one_over_hiReg;
+        double vi = hvi * one_over_hiReg;
+        double etai = hetai * one_over_hiReg;
+        double meshSizei = std::sqrt(mi);
+
+        // We define pTilde at ith node here
+        double diff_over_h_i = (hetai - hi * hi) * one_over_hiReg;
+        double pTildei = -(LAMBDA_MGN * g / (3.0 * meshSizei)) * 6.0 * hi *
+                         (hetai - hi * hi);
+
+        if (IF_BOTH_GAMMA_BRANCHES) {
+          if (hetai > std::pow(hi, 2.0)) {
+            pTildei = -(LAMBDA_MGN * g / (3.0 * meshSizei)) * 2.0 *
+                      diff_over_h_i * (etai * etai + etai * hi + hi * hi);
+          }
+        }
+
+        // define full pressure at ith node for definition of bar states
+        double pressure_i = 0.5 * g * hi * hi + pTildei;
+
+        // loop over the sparsity pattern of the i-th DOF
+        for (int offset = csrRowIndeces_DofLoops[i];
+             offset < csrRowIndeces_DofLoops[i + 1]; offset++) {
+          int j = csrColumnOffsets_DofLoops[offset];
+
+          // define things at jth node
+          double hj = h_dof_old[j];
+          double huj = hu_dof_old[j];
+          double hvj = hv_dof_old[j];
+          double hetaj = heta_dof_old[j];
+          double hwj = hw_dof_old[j];
+          double hbetaj = hbeta_dof_old[j];
+          double Zj = b_dof[j];
+          double one_over_hjReg =
+              2.0 * hj / (hj * hj + std::pow(fmax(hj, hEps), 2));
+          double uj = huj * one_over_hjReg;
+          double vj = hvj * one_over_hjReg;
+          double etaj = hetaj * one_over_hjReg;
+          double mj = lumped_mass_matrix[j];
+          double meshSizej = std::sqrt(mj); // local mesh size in 2d
+
+          // Here we define pTilde at jth node
+          double diff_over_h_j = (hetaj - hj * hj) * one_over_hjReg;
+          double pTildej = -(LAMBDA_MGN * g / (3.0 * meshSizej)) * 6.0 * hj *
+                           (hetaj - hj * hj);
+
+          if (IF_BOTH_GAMMA_BRANCHES) {
+            if (hetaj > std::pow(hj, 2.0)) {
+              pTildej = -(LAMBDA_MGN * g / (3.0 * meshSizej)) * 2.0 *
+                        diff_over_h_j * (etaj * etaj + etaj * hj + hj * hj);
+            }
+          }
+
+          // define pressure at jth node for bar states
+          double pressure_j = 0.5 * g * hj * hj + pTildej;
+
+          // Compute star states
+          double hStarij = fmax(0., hi + Zi - fmax(Zi, Zj));
+          double huStarij = hui * hStarij * one_over_hiReg;
+          double hvStarij = hvi * hStarij * one_over_hiReg;
+          double hetaStarij = hetai * std::pow(hStarij * one_over_hiReg, 2);
+          double hwStarij = hwi * hStarij * one_over_hiReg;
+          double hbetaStarij = hbetai * hStarij * one_over_hiReg;
+
+          double hStarji = fmax(0., hj + Zj - fmax(Zi, Zj));
+          double huStarji = huj * hStarji * one_over_hjReg;
+          double hvStarji = hvj * hStarji * one_over_hjReg;
+          double hetaStarji = hetaj * std::pow(hStarji * one_over_hjReg, 2);
+          double hwStarji = hwj * hStarji * one_over_hjReg;
+          double hbetaStarji = hbetaj * hStarji * one_over_hjReg;
+
+          // for bar_deltaSqd_h, bar_deltaSqd_heta, bar_deltaSqd_kin
+          double muLowij = 0., muLij = 0., dLowij = 0., dLij = 0.;
+          if (i != j) {
+            // Put these computations first  before it gets messy
+            bar_deltaSqd_h[i] += delta_Sqd_h[j] + delta_Sqd_h[i];
+            bar_deltaSqd_heta[i] += delta_Sqd_heta[j] + delta_Sqd_heta[i];
+            bar_deltaSqd_kin[i] += delta_Sqd_kin[j] + delta_Sqd_kin[i];
+
+            if (lstage == 0)
+              dLowij = dLow[ij];
+            else {
+              double cij_norm = sqrt(Cx[ij] * Cx[ij] + Cy[ij] * Cy[ij]);
+              double cji_norm = sqrt(CTx[ij] * CTx[ij] + CTy[ij] * CTy[ij]);
+              double nxij = Cx[ij] / cij_norm, nyij = Cy[ij] / cij_norm;
+              double nxji = CTx[ij] / cji_norm, nyji = CTy[ij] / cji_norm;
+              dLowij = fmax(maxWaveSpeedSharpInitialGuess(
+                                g, nxij, nyij, hi, hui, hvi, hetai, mi, hj, huj,
+                                hvj, hetaj, mj, hEps, hEps, false) *
+                                cij_norm,
+                            maxWaveSpeedSharpInitialGuess(
+                                g, nxji, nyji, hj, huj, hvj, hetaj, mj, hi, hui,
+                                hvi, hetai, mi, hEps, hEps, false) *
+                                cji_norm);
+            }
+            // save dLij
+            dLij = dLowij;
+
+            // compute muij
+            muLij = fmax(fmax(0., -(ui * Cx[ij] + vi * Cy[ij])),
+                         fmax(0., (uj * Cx[ij] + vj * Cy[ij])));
+
+            // Define dLij as max of dLij and muLij
+            dLij = fmax(dLowij, muLij);
+            dLow[ij] = fmax(dLij, muLij);
+
+            ////////////////////////
+            // COMPUTE BAR STATES //
+            ////////////////////////
+            double hBar_ij = 0, hTilde_ij = 0, huBar_ij = 0, huTilde_ij = 0,
+                   hvBar_ij = 0, hvTilde_ij = 0, hetaBar_ij = 0,
+                   hetaTilde_ij = 0, hwBar_ij = 0, hwTilde_ij = 0,
+                   hbetaBar_ij = 0, hbetaTilde_ij = 0;
+
+            // h component
+            hBar_ij = -1. / (fmax(2.0 * dLij, dij_small)) *
+                          ((uj * hj - ui * hi) * Cx[ij] +
+                           (vj * hj - vi * hi) * Cy[ij]) +
+                      0.5 * (hj + hi);
+            hTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
+                        ((hStarji - hj) - (hStarij - hi));
+            // hu component
+            huBar_ij =
+                -1. / (fmax(2.0 * dLij, dij_small)) *
+                    ((uj * huj - ui * hui + pressure_j - pressure_i) * Cx[ij] +
+                     (vj * huj - vi * hui) * Cy[ij]) +
+                0.5 * (huj + hui);
+            huTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
+                         ((huStarji - huj) - (huStarij - hui));
+            // hv component
+            hvBar_ij =
+                -1. / (fmax(2.0 * dLij, dij_small)) *
+                    ((uj * hvj - ui * hvi) * Cx[ij] +
+                     (vj * hvj - vi * hvi + pressure_j - pressure_i) * Cy[ij]) +
+                0.5 * (hvj + hvi);
+            hvTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
+                         ((hvStarji - hvj) - (hvStarij - hvi));
+            // heta component
+            hetaBar_ij = -1. / (fmax(2.0 * dLij, dij_small)) *
+                             ((uj * hetaj - ui * hetai) * Cx[ij] +
+                              (vj * hetaj - vi * hetai) * Cy[ij]) +
+                         0.5 * (hetaj + hetai);
+            hetaTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
+                           ((hetaStarji - hetaj) - (hetaStarij - hetai));
+            // hw component
+            hwBar_ij = -1. / (fmax(2.0 * dLij, dij_small)) *
+                           ((uj * hwj - ui * hwi) * Cx[ij] +
+                            (vj * hwj - vi * hwi) * Cy[ij]) +
+                       0.5 * (hwj + hwi);
+            hwTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
+                         ((hwStarji - hwj) - (hwStarij - hwi));
+            // hbeta component
+            hbetaBar_ij = -1. / (fmax(2.0 * dLij, dij_small)) *
+                              ((uj * hbetaj - ui * hbetai) * Cx[ij] +
+                               (vj * hbetaj - vi * hbetai) * Cy[ij]) +
+                          0.5 * (hbetaj + hbetai);
+            hbetaTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
+                            ((hbetaStarji - hbetaj) - (hbetaStarij - hbetai));
+
+            // Here we define uBar + uTilde
+            hBT[ij] = hBar_ij + hTilde_ij;
+            huBT[ij] = huBar_ij + huTilde_ij;
+            hvBT[ij] = hvBar_ij + hvTilde_ij;
+            hetaBT[ij] = hetaBar_ij + hetaTilde_ij;
+            hwBT[ij] = hwBar_ij + hwTilde_ij;
+            hbetaBT[ij] = hbetaBar_ij + hbetaTilde_ij;
+          } else {
+            // i==j
+            // Bar states by definition satisfy Utilde_ii + Ubar_ii = U_i
+            hBT[ij] = hi;
+            huBT[ij] = hui;
+            hvBT[ij] = hvi;
+            hetaBT[ij] = hetai;
+            hwBT[ij] = hwi;
+            hbetaBT[ij] = hbetai;
+          }
+
+          // UPDATE ij //
+          ij += 1;
+        } // j loop ends here
+
+        // for bar_deltaSqd_h, bar_deltaSqd_heta, bar_deltaSqd_kin
+        bar_deltaSqd_h[i] =
+            bar_deltaSqd_h[i] /
+            (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i]) / 2.0;
+        bar_deltaSqd_heta[i] =
+            bar_deltaSqd_heta[i] /
+            (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i]) / 2.0;
+        bar_deltaSqd_kin[i] =
+            bar_deltaSqd_kin[i] /
+            (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i]) / 2.0;
+
+      } // i loops ends here
+
+      /* Then final loop of first set to get local bounds */
+      ij = 0;
+      for (int i = 0; i < numDOFsPerEqn; i++) {
+
+        // define m_i
+        double mi = lumped_mass_matrix[i];
+
+        /* Initialize hmin, hmax, heta_min, heta_max */
+        h_min[i] = h_dof_old[i];
+        h_max[i] = h_dof_old[i];
+        heta_min[i] = heta_dof_old[i];
+        heta_max[i] = heta_dof_old[i];
+
+        /* Initialize low order solution */
+        hLow[i] = h_dof_old[i];
+        huLow[i] = hu_dof_old[i];
+        hvLow[i] = hv_dof_old[i];
+        hetaLow[i] = heta_dof_old[i];
+        hwLow[i] = hw_dof_old[i];
+        hbetaLow[i] = hbeta_dof_old[i];
+        kin_max[i] = kin[i];
+
+        // loop in j (sparsity pattern)
+        for (int offset = csrRowIndeces_DofLoops[i];
+             offset < csrRowIndeces_DofLoops[i + 1]; offset++) {
+
+          int j = csrColumnOffsets_DofLoops[offset];
+
+          double psi_ij = 0;
+          double one_over_hBT =
+              2.0 * hBT[ij] /
+              (hBT[ij] * hBT[ij] + std::pow(fmax(hBT[ij], hEps), 2));
+          psi_ij = one_over_hBT * (huBT[ij] * huBT[ij] + hvBT[ij] * hvBT[ij]) /
+                   2.0; // Eqn (6.31)
+
+          // COMPUTE LOCAL BOUNDS //
+          kin_max[i] = fmax(psi_ij, kin_max[i]);
+          h_min[i] = std::min(h_min[i], hBT[ij]);
+          h_max[i] = std::max(h_max[i], hBT[ij]);
+          heta_min[i] = std::min(heta_min[i], hetaBT[ij]);
+          heta_max[i] = std::max(heta_max[i], hetaBT[ij]);
+
+          // Then do relaxation of bounds here. If confused, see convex
+          // limiting paper
+          kin_max[i] =
+              std::min(urelax[i] * kin_max[i],
+                       kin_max[i] + std::abs(bar_deltaSqd_kin[i]) / 2.0);
+          h_min[i] = std::max(drelax[i] * h_min[i],
+                              h_min[i] - std::abs(bar_deltaSqd_h[i]) / 2.0);
+          h_max[i] = std::min(urelax[i] * h_max[i],
+                              h_max[i] + std::abs(bar_deltaSqd_h[i]) / 2.0);
+          heta_min[i] =
+              std::max(drelax[i] * heta_min[i],
+                       heta_min[i] - std::abs(bar_deltaSqd_heta[i]) / 2.0);
+          heta_max[i] =
+              std::min(urelax[i] * heta_max[i],
+                       heta_max[i] + std::abs(bar_deltaSqd_heta[i]) / 2.0);
+
+          /* COMPUTE LOW ORDER SOLUTION. See EQN 6.23 in SW friction paper */
+          // This is low order solution WITHOUT sources
+          if (i != j) {
+            hLow[i] += h_dof_old[i] * (-dt / mi * 2 * dLow[ij]) +
+                       dt / mi * (2 * dLow[ij] * hBT[ij]);
+            huLow[i] += hu_dof_old[i] * (-dt / mi * 2 * dLow[ij]) +
+                        dt / mi * (2 * dLow[ij] * huBT[ij]);
+            hvLow[i] += hv_dof_old[i] * (-dt / mi * 2 * dLow[ij]) +
+                        dt / mi * (2 * dLow[ij] * hvBT[ij]);
+            hetaLow[i] += heta_dof_old[i] * (-dt / mi * 2 * dLow[ij]) +
+                          dt / mi * (2 * dLow[ij] * hetaBT[ij]);
+            hwLow[i] += hw_dof_old[i] * (-dt / mi * 2 * dLow[ij]) +
+                        dt / mi * (2 * dLow[ij] * hwBT[ij]);
+            hbetaLow[i] += hbeta_dof_old[i] * (-dt / mi * 2 * dLow[ij]) +
+                           dt / mi * (2 * dLow[ij] * hbetaBT[ij]);
+          }
+          // UPDATE ij //
+          ij += 1;
+        } // j loop ends here
+
+        // clean up hLow from round off error
+        if (hLow[i] < hEps)
+          hLow[i] = 0.0;
+      } // i loop ends here
+
+      ////////////////////////////////////////////////////////
+      // ********** Second set of loops on dofs ********** //
+      ///////////////////////////////////////////////////////
       // To compute:
       //     * Hyperbolic part of the flux
       //     * Extended source terms
       //     * Smoothness indicator
 
-      int ij = 0;
+      ij = 0;
       std::valarray<double> hyp_flux_h(numDOFsPerEqn),
           hyp_flux_hu(numDOFsPerEqn), hyp_flux_hv(numDOFsPerEqn),
           hyp_flux_heta(numDOFsPerEqn), hyp_flux_hw(numDOFsPerEqn),
@@ -1415,7 +1657,6 @@ public:
           etaMax(numDOFsPerEqn), etaMin(numDOFsPerEqn);
 
       for (int i = 0; i < numDOFsPerEqn; i++) {
-
         // solution at time tn for the ith DOF
         double hi = h_dof_old[i];
         double hui = hu_dof_old[i];
@@ -1472,8 +1713,8 @@ public:
                 hi, hui, hvi, hetai, hwi, 0.0, 0.0, 0.0, 0.0, 0.0,
                 extendedSourceTerm_hu[i], extendedSourceTerm_hu[i],
                 extendedSourceTerm_hv[i], extendedSourceTerm_heta[i],
-                extendedSourceTerm_hw[i], // this second new_SourceTerm_hu does
-                                          // nothing
+                extendedSourceTerm_hw[i], // this second new_SourceTerm_hu
+                                          // does nothing
                 new_SourceTerm_hu[i], new_SourceTerm_hu[i],
                 new_SourceTerm_hv[i], new_SourceTerm_heta[i],
                 new_SourceTerm_hw[i], x_loc, mi, std::sqrt(g * hEps / eps));
@@ -1634,7 +1875,6 @@ public:
                 alphai, POWER_SMOOTHNESS_INDICATOR); // NOTE: alpha^4 for mGN
         }
       }
-      // abort();
       // ********** END OF 2nd LOOP ON DOFS ********** //
 
       /////////////////////////////////////////////
@@ -1646,7 +1886,6 @@ public:
 
       ij = 0;
       for (int i = 0; i < numDOFsPerEqn; i++) {
-
         double hi = h_dof_old[i];
         double hui = hu_dof_old[i];
         double hvi = hv_dof_old[i];
@@ -1768,7 +2007,8 @@ public:
                                 cji_norm);
             }
             // this is standard low-order dij, can you use dLij =
-            // dLowij*fmax(psi[i],psi[j]) if want smoothness based as low order
+            // dLowij*fmax(psi[i],psi[j]) if want smoothness based as low
+            // order
             dLij = dLowij;
 
             ///////////////////////////////////////
@@ -1784,67 +2024,6 @@ public:
 
             // Then save dLow for limiting step, maybe a bit confusing
             dLow[ij] = fmax(dLij, muLij);
-
-            ////////////////////////
-            // COMPUTE BAR STATES //
-            ////////////////////////
-            double hBar_ij = 0, hTilde_ij = 0, huBar_ij = 0, huTilde_ij = 0,
-                   hvBar_ij = 0, hvTilde_ij = 0, hetaBar_ij = 0,
-                   hetaTilde_ij = 0, hwBar_ij = 0, hwTilde_ij = 0,
-                   hbetaBar_ij = 0, hbetaTilde_ij = 0;
-
-            // h component
-            hBar_ij = -1. / (fmax(2.0 * dLij, dij_small)) *
-                          ((uj * hj - ui * hi) * Cx[ij] +
-                           (vj * hj - vi * hi) * Cy[ij]) +
-                      0.5 * (hj + hi);
-            hTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
-                        ((hStarji - hj) - (hStarij - hi));
-            // hu component
-            huBar_ij =
-                -1. / (fmax(2.0 * dLij, dij_small)) *
-                    ((uj * huj - ui * hui + pressure_j - pressure_i) * Cx[ij] +
-                     (vj * huj - vi * hui) * Cy[ij]) +
-                0.5 * (huj + hui);
-            huTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
-                         ((huStarji - huj) - (huStarij - hui));
-            // hv component
-            hvBar_ij =
-                -1. / (fmax(2.0 * dLij, dij_small)) *
-                    ((uj * hvj - ui * hvi) * Cx[ij] +
-                     (vj * hvj - vi * hvi + pressure_j - pressure_i) * Cy[ij]) +
-                0.5 * (hvj + hvi);
-            hvTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
-                         ((hvStarji - hvj) - (hvStarij - hvi));
-            // heta component
-            hetaBar_ij = -1. / (fmax(2.0 * dLij, dij_small)) *
-                             ((uj * hetaj - ui * hetai) * Cx[ij] +
-                              (vj * hetaj - vi * hetai) * Cy[ij]) +
-                         0.5 * (hetaj + hetai);
-            hetaTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
-                           ((hetaStarji - hetaj) - (hetaStarij - hetai));
-            // hw component
-            hwBar_ij = -1. / (fmax(2.0 * dLij, dij_small)) *
-                           ((uj * hwj - ui * hwi) * Cx[ij] +
-                            (vj * hwj - vi * hwi) * Cy[ij]) +
-                       0.5 * (hwj + hwi);
-            hwTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
-                         ((hwStarji - hwj) - (hwStarij - hwi));
-            // hbeta component
-            hbetaBar_ij = -1. / (fmax(2.0 * dLij, dij_small)) *
-                              ((uj * hbetaj - ui * hbetai) * Cx[ij] +
-                               (vj * hbetaj - vi * hbetai) * Cy[ij]) +
-                          0.5 * (hbetaj + hbetai);
-            hbetaTilde_ij = (dLij - muLij) / (fmax(2.0 * dLij, dij_small)) *
-                            ((hbetaStarji - hbetaj) - (hbetaStarij - hbetai));
-
-            // Here we define uBar + uTilde
-            hBT[ij] = hBar_ij + hTilde_ij;
-            huBT[ij] = huBar_ij + huTilde_ij;
-            hvBT[ij] = hvBar_ij + hvTilde_ij;
-            hetaBT[ij] = hetaBar_ij + hetaTilde_ij;
-            hwBT[ij] = hwBar_ij + hwTilde_ij;
-            hbetaBT[ij] = hbetaBar_ij + hbetaTilde_ij;
 
             ///////////////////////
             // ENTROPY VISCOSITY //
@@ -1886,13 +2065,6 @@ public:
                                     // Uj-Ui will be zero
             muH_minus_muL[ij] = 0.; // Not true but the prod of this times
             // Uj-Ui will be zero
-            // Bar states by definition satisfy Utilde_ii + Ubar_ii = U_i
-            hBT[ij] = hi;
-            huBT[ij] = hui;
-            hvBT[ij] = hvi;
-            hetaBT[ij] = hetai;
-            hwBT[ij] = hwi;
-            hbetaBT[ij] = hbetai;
           }
 
           // update ij
