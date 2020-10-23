@@ -95,7 +95,6 @@ class RKEV(proteus.TimeIntegration.SSP):
         argsDict["dLow"] = self.transport.dLow
         argsDict["run_cfl"] = self.runCFL
         argsDict["edge_based_cfl"] = self.transport.edge_based_cfl
-        argsDict["debug"] = 0
         adjusted_maxCFL = self.transport.dsw_2d.calculateEdgeBasedCFL(argsDict)
 
         maxCFL = max(maxCFL, max(adjusted_maxCFL,
@@ -1560,6 +1559,7 @@ class LevelModel(proteus.Transport.OneLevelTransport):
 
         # lets call calculate EV first and distribute
         self.computeEV()
+        self.par_global_entropy_residual.scatter_forward_insert()
 
         argsDict = cArgumentsDict.ArgumentsDict()
         argsDict["mesh_trial_ref"] = self.u[0].femSpace.elementMaps.psi
@@ -1711,7 +1711,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["relaxation_NodeArray"] = self.relaxationZone_nodeIndex
 
         # call calculate residual
-        self.par_global_entropy_residual.scatter_forward_insert()
         self.calculateResidual(argsDict)
 
         # distribute local bounds and low order solutions (with bar states)

@@ -28,7 +28,7 @@ struct compare {
   bool operator()(int const &i) { return (i == key); }
 };
 
-// for mGN stuff "max" wave speeds. See section 4.4 of first mGN paper by
+// for Serre--Saint-Venant "max" wave speeds. See section 4.4 of  JCP 2019
 // Guermond, Popov, Tovar, Kees for formulas
 inline double GN_nu1(const double &g, const double &hL, const double &uL,
                      const double &etaL, const double &meshSizeL) {
@@ -44,8 +44,6 @@ inline double GN_nu1(const double &g, const double &hL, const double &uL,
 }
 inline double GN_nu3(const double &g, const double &hR, const double &uR,
                      const double &etaR, const double &meshSizeR) {
-  // See section 4.4 of first mGN paper by Guermond, Popov, Tovar, Kees for
-  // formulas
   double augR = LAMBDA_MGN / (3. * meshSizeR) * (6. * hR + 12. * (hR - etaR));
 
   if (etaR >= hR) {
@@ -91,19 +89,6 @@ inline double ENTROPY_FLUX2(const double &g, const double &h, const double &hu,
           g * h * z) *
          hv * one_over_hReg;
 }
-// FOR ESTIMATING MAX WAVE SPEEDS
-inline double nu1(const double &g, const double &hStar, const double &hL,
-                  const double &uL, const double &one_over_hL) {
-  return (uL - sqrt(g * hL) *
-                   sqrt((1. + fmax((hStar - hL) / 2. * one_over_hL, 0.0)) *
-                        (1. + fmax((hStar - hL) * one_over_hL, 0.))));
-}
-inline double nu3(const double &g, const double &hStar, const double &hR,
-                  const double &uR, const double &one_over_hR) {
-  return (uR + sqrt(g * hR) *
-                   sqrt((1. + fmax((hStar - hR) / 2. * one_over_hR, 0.0)) *
-                        (1. + fmax((hStar - hR) * one_over_hR, 0.))));
-}
 inline void calculateRelaxationZones(
     const double h, const double hu, const double hv, const double heta,
     const double hw, const double h_wave, const double hu_wave,
@@ -124,23 +109,18 @@ inline void calculateRelaxationZones(
       speed / mesh_size * exp(-pow(x - 16., 2.0) / denom);
 
   // Add sources to equations
-  // h_source -=
-  //     relaxation_function * viscosity * (alpha + beta * uc) * (h - h_wave);
   hu_source += relaxation_function * (hu - hu_wave) * lumped_mass;
   hu_newSource -= relaxation_function * (hu - hu_wave) * lumped_mass;
   //  relaxation_function * viscosity * (alpha + beta * uc) * (hu - hu_wave);
   hv_source += relaxation_function * (hv - hv_wave) * lumped_mass;
   hv_newSource -= relaxation_function * (hv - hv_wave) * lumped_mass;
-  //  relaxation_function * viscosity * (alpha + beta * uc) * (hv - hv_wave);
-  // heta_source -= relaxation_function * viscosity * (alpha + beta * uc) *
-  //                (heta - heta_wave);
   hw_source += relaxation_function * (hw - hw_wave) * lumped_mass;
   hw_newSource -= relaxation_function * (hw - hw_wave) * lumped_mass;
-  //    relaxation_function * viscosity * (alpha + beta * uc) * (hw - hw_wave);
 }
-} // end namespace proteus
+} // namespace proteus
 
 namespace proteus {
+
 class GN_SW2DCV_base {
 public:
   virtual ~GN_SW2DCV_base() {}
@@ -174,23 +154,20 @@ public:
                                               double hetaL, double lumpedL,
                                               double hR, double huR, double hvR,
                                               double hetaR, double lumpedR,
-                                              double hEpsL, double hEpsR,
-                                              bool debugging) {
+                                              double hEps) {
     double lambda1, lambda3;
-
-    // To avoid division by 0
-    double one_over_hL = 2.0 * hL / (hL * hL + std::pow(fmax(hL, hEpsL), 2.0));
-    double one_over_hR = 2.0 * hR / (hR * hR + std::pow(fmax(hR, hEpsR), 2.0));
+    double one_over_hL = 2.0 * hL / (hL * hL + std::pow(fmax(hL, hEps), 2.0));
+    double one_over_hR = 2.0 * hR / (hR * hR + std::pow(fmax(hR, hEps), 2.0));
     double hVelL = nx * huL + ny * hvL;
     double hVelR = nx * huR + ny * hvR;
     double velL = one_over_hL * hVelL;
     double velR = one_over_hR * hVelR;
-    double etaL = 2.0 * hL / (hL * hL + std::pow(fmax(hL, hEpsL), 2)) * hetaL;
-    double etaR = 2.0 * hR / (hR * hR + std::pow(fmax(hR, hEpsR), 2)) * hetaR;
+    double etaL = 2.0 * hL / (hL * hL + std::pow(fmax(hL, hEps), 2)) * hetaL;
+    double etaR = 2.0 * hR / (hR * hR + std::pow(fmax(hR, hEps), 2)) * hetaR;
     double meshSizeL = sqrt(lumpedL);
     double meshSizeR = sqrt(lumpedR);
 
-    /* See equation 4.12 from mGN paper:
+    /* See equation 4.12 JCP 2019 paper:
       1-eigenvalue: uL-sqrt(g*hL)*sqrt(1 + augL)
       3-eigenvalue: uR+sqrt(g*hR)*sqrt(1 + augR)
     */
@@ -307,7 +284,7 @@ public:
     ////////////////////////////////////////////////////
     int ij = 0;
     for (int i = 0; i < numDOFs; i++) {
-      // read some vectors
+      // Read some vectors
       double high_order_hnp1i = high_order_hnp1[i];
       double high_order_hunp1i = high_order_hunp1[i];
       double high_order_hvnp1i = high_order_hvnp1[i];
@@ -331,7 +308,7 @@ public:
 
         int j = csrColumnOffsets_DofLoops[offset];
 
-        // read some vectors
+        // Read some vectors
         double hj = h_old[j];
         double hunj = hu_old[j];
         double hvnj = hv_old[j];
@@ -340,7 +317,7 @@ public:
         double hbetanj = hbeta_old[j];
         double Zj = b_dof[j];
         double one_over_hjReg =
-            2. * hj / (hj * hj + std::pow(fmax(hj, hEps), 2)); // hEps
+            2. * hj / (hj * hj + std::pow(fmax(hj, hEps), 2));
 
         // Compute star states
         double hStarij = fmax(0., hi + Zi - fmax(Zi, Zj));
@@ -529,7 +506,7 @@ public:
           double hwStarji = hwnj * hStarji * one_over_hjReg;
           double hbetaStarji = hbetanj * hStarji * one_over_hjReg;
 
-          // compute limiter based on water height
+          // Compute limiter based on water height
           if (FCT_h[ij] >= 0) {
             Lij_array[ij] = fmin(Lij_array[ij], std::min(Rneg[j], Rpos[i]));
           } else {
@@ -618,52 +595,9 @@ public:
         hetaLow[i] += one_over_mi * ith_Limiter_times_FluxCorrectionMatrix4;
         hwLow[i] += one_over_mi * ith_Limiter_times_FluxCorrectionMatrix5;
         hbetaLow[i] += one_over_mi * ith_Limiter_times_FluxCorrectionMatrix6;
-      } // end i loop for computing limiter and sum_j(lij * Aij)
+      } // end i loop
 
-      // update final limted solution
-      // limited_hnp1 = hLow;
-      // limited_hunp1 = huLow + dt * 1.0 / lumped_mass_matrix *
-      // new_SourceTerm_hu; limited_hvnp1 = hvLow + dt * 1.0 /
-      // lumped_mass_matrix * new_SourceTerm_hv; limited_hetanp1 =
-      //     hetaLow - dt * 1.0 / lumped_mass_matrix * extendedSourceTerm_heta;
-      // limited_hwnp1 =
-      //     hwLow - dt * 1.0 / lumped_mass_matrix * extendedSourceTerm_hw;
-      // limited_hbetanp1 =
-      //     hbetaLow - dt * 1.0 / lumped_mass_matrix *
-      //     extendedSourceTerm_hbeta;
-      //
-      // if (xt::any(xt::less(limited_hnp1, -hEps)) && dt < 1.0) {
-      //   std::cout << "Limited water height is negative: \n "
-      //             << "hLow: " << hLow[xt::less(limited_hnp1, -hEps)] << "\n"
-      //             << "hHigh: " << limited_hnp1[xt::less(limited_hnp1, -hEps)]
-      //             << "\n"
-      //             << "hEps:  " << hEps << "\n"
-      //             << " ... aborting!" << std::endl;
-      //   abort();
-      // } else {
-      //   // clean up uHigh from round off error
-      //   limited_hnp1 = xt::where(limited_hnp1 > hEps, limited_hnp1, 0.0);
-      //   limited_hetanp1 = xt::where(limited_hnp1 > hEps, limited_hetanp1,
-      //   0.0);
-      //
-      //   // define aux is an array
-      //   xt::pyarray<double> aux =
-      //       xt::where(limited_hnp1 > hEps, limited_hnp1, hEps);
-      //
-      //   limited_hunp1 *= 2 * xt::pow(limited_hnp1, VEL_FIX_POWER) /
-      //                    (xt::pow(limited_hnp1, VEL_FIX_POWER) +
-      //                     xt::pow(aux, VEL_FIX_POWER));
-      //   limited_hvnp1 *= 2 * xt::pow(limited_hnp1, VEL_FIX_POWER) /
-      //                    (xt::pow(limited_hnp1, VEL_FIX_POWER) +
-      //                     xt::pow(aux, VEL_FIX_POWER));
-      //   limited_hwnp1 *= 2 * xt::pow(limited_hnp1, VEL_FIX_POWER) /
-      //                    (xt::pow(limited_hnp1, VEL_FIX_POWER) +
-      //                     xt::pow(aux, VEL_FIX_POWER));
-      //   limited_hbetanp1 *= 2 * xt::pow(limited_hnp1, VEL_FIX_POWER) /
-      //                       (xt::pow(limited_hnp1, VEL_FIX_POWER) +
-      //                        xt::pow(aux, VEL_FIX_POWER));
-      // }
-
+      // Final loop to define limited solution, maybe should vectorize?
       for (int i = 0; i < numDOFs; i++) {
         double one_over_mi = 1.0 / lumped_mass_matrix[i];
         limited_hnp1[i] = hLow[i];
@@ -738,9 +672,9 @@ public:
     xt::pyarray<double> &dLow = args.array<double>("dLow");
     double run_cfl = args.scalar<double>("run_cfl");
     xt::pyarray<double> &edge_based_cfl = args.array<double>("edge_based_cfl");
-    int debug = args.scalar<int>("debug");
 
     double max_edge_based_cfl = 0.;
+
     int ij = 0;
     for (int i = 0; i < numDOFsPerEqn; i++) {
       // solution at time tn for the ith DOF
@@ -753,6 +687,7 @@ public:
 
       for (int offset = csrRowIndeces_DofLoops[i];
            offset < csrRowIndeces_DofLoops[i + 1]; offset++) {
+
         // loop in j (sparsity pattern)
         int j = csrColumnOffsets_DofLoops[offset];
 
@@ -771,15 +706,13 @@ public:
           double cji_norm = sqrt(CTx[ij] * CTx[ij] + CTy[ij] * CTy[ij]);
           double nxij = Cx[ij] / cij_norm, nyij = Cy[ij] / cij_norm;
           double nxji = CTx[ij] / cji_norm, nyji = CTy[ij] / cji_norm;
-          dLow[ij] =
-              fmax(maxWaveSpeedSharpInitialGuess(g, nxij, nyij, hi, hui, hvi,
-                                                 hetai, mi, hj, huj, hvj, hetaj,
-                                                 mj, hEps, hEps, debug) *
-                       cij_norm, // hEps
-                   maxWaveSpeedSharpInitialGuess(g, nxji, nyji, hj, huj, hvj,
-                                                 hetaj, mj, hi, hui, hvi, hetai,
-                                                 mi, hEps, hEps, debug) *
-                       cji_norm); // hEps
+          dLow[ij] = fmax(
+              maxWaveSpeedSharpInitialGuess(g, nxij, nyij, hi, hui, hvi, hetai,
+                                            mi, hj, huj, hvj, hetaj, mj, hEps) *
+                  cij_norm, // hEps
+              maxWaveSpeedSharpInitialGuess(g, nxji, nyji, hj, huj, hvj, hetaj,
+                                            mj, hi, hui, hvi, hetai, mi, hEps) *
+                  cji_norm); // hEps
           dLowii -= dLow[ij];
 
         } else
@@ -1450,14 +1383,15 @@ public:
               double cji_norm = sqrt(CTx[ij] * CTx[ij] + CTy[ij] * CTy[ij]);
               double nxij = Cx[ij] / cij_norm, nyij = Cy[ij] / cij_norm;
               double nxji = CTx[ij] / cji_norm, nyji = CTy[ij] / cji_norm;
-              dLowij = fmax(maxWaveSpeedSharpInitialGuess(
-                                g, nxij, nyij, hi, hui, hvi, hetai, mi, hj, huj,
-                                hvj, hetaj, mj, hEps, hEps, false) *
-                                cij_norm,
-                            maxWaveSpeedSharpInitialGuess(
-                                g, nxji, nyji, hj, huj, hvj, hetaj, mj, hi, hui,
-                                hvi, hetai, mi, hEps, hEps, false) *
-                                cji_norm);
+              dLowij =
+                  fmax(maxWaveSpeedSharpInitialGuess(g, nxij, nyij, hi, hui,
+                                                     hvi, hetai, mi, hj, huj,
+                                                     hvj, hetaj, mj, hEps) *
+                           cij_norm,
+                       maxWaveSpeedSharpInitialGuess(g, nxji, nyji, hj, huj,
+                                                     hvj, hetaj, mj, hi, hui,
+                                                     hvi, hetai, mi, hEps) *
+                           cji_norm);
             }
             // save dLij
             dLij = dLowij;
@@ -1997,14 +1931,15 @@ public:
               double cji_norm = sqrt(CTx[ij] * CTx[ij] + CTy[ij] * CTy[ij]);
               double nxij = Cx[ij] / cij_norm, nyij = Cy[ij] / cij_norm;
               double nxji = CTx[ij] / cji_norm, nyji = CTy[ij] / cji_norm;
-              dLowij = fmax(maxWaveSpeedSharpInitialGuess(
-                                g, nxij, nyij, hi, hui, hvi, hetai, mi, hj, huj,
-                                hvj, hetaj, mj, hEps, hEps, false) *
-                                cij_norm,
-                            maxWaveSpeedSharpInitialGuess(
-                                g, nxji, nyji, hj, huj, hvj, hetaj, mj, hi, hui,
-                                hvi, hetai, mi, hEps, hEps, false) *
-                                cji_norm);
+              dLowij =
+                  fmax(maxWaveSpeedSharpInitialGuess(g, nxij, nyij, hi, hui,
+                                                     hvi, hetai, mi, hj, huj,
+                                                     hvj, hetaj, mj, hEps) *
+                           cij_norm,
+                       maxWaveSpeedSharpInitialGuess(g, nxji, nyji, hj, huj,
+                                                     hvj, hetaj, mj, hi, hui,
+                                                     hvi, hetai, mi, hEps) *
+                           cji_norm);
             }
             // this is standard low-order dij, can you use dLij =
             // dLowij*fmax(psi[i],psi[j]) if want smoothness based as low
