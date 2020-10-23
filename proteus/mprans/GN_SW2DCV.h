@@ -759,7 +759,6 @@ public:
     // To compute:
     //     * Entropy at i-th node
     std::valarray<double> eta(numDOFsPerEqn);
-
     for (int i = 0; i < numDOFsPerEqn; i++) {
       // COMPUTE ENTROPY. NOTE: WE CONSIDER A FLAT BOTTOM
       double hi = h_dof_old[i];
@@ -1233,11 +1232,6 @@ public:
       //     * Low order solution (in terms of bar states)
 
       // Here we declare the arrays for local bounds
-      // xt::pyarray<double> urelax(numDOFsPerEqn), drelax(numDOFsPerEqn);
-      // xt::pyarray<double> delta_Sqd_h(numDOFsPerEqn),
-      //     bar_deltaSqd_h(numDOFsPerEqn), delta_Sqd_heta(numDOFsPerEqn),
-      //     bar_deltaSqd_heta(numDOFsPerEqn), delta_Sqd_kin(numDOFsPerEqn),
-      //     bar_deltaSqd_kin(numDOFsPerEqn);
       std::valarray<double> urelax(0.0, numDOFsPerEqn),
           drelax(0.0, numDOFsPerEqn);
       std::valarray<double> delta_Sqd_h(0.0, numDOFsPerEqn),
@@ -1633,7 +1627,7 @@ public:
                       fmax(hi_to_the_gamma, xi * g * n2 * dt * veli_norm)));
           extendedSourceTerm_hu[i] = friction_aux * hui;
           extendedSourceTerm_hv[i] = friction_aux * hvi;
-          // For use in the convex limiting functionT
+          // For use in the convex limiting function
           new_SourceTerm_hu[i] = -friction_aux * hui;
           new_SourceTerm_hv[i] = -friction_aux * hvi;
         }

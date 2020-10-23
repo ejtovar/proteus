@@ -1488,7 +1488,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
                                                 bs=1,
                                                 n=n,N=N,nghosts=nghosts,
                                                 subdomain2global=subdomain2global)
-        #
         self.par_normalx = LAT.ParVec_petsc4py(self.normalx,
                                                 bs=1,
                                                 n=n,N=N,nghosts=nghosts,

@@ -367,7 +367,6 @@ class Coefficients(proteus.TransportCoefficients.TC_base):
 
             # Init reflectingBoundaryIndex for partial reflecting boundaries
             self.model.reflectingBoundaryIndex = np.where(np.isin(self.model.mesh.nodeMaterialTypes, 99))[0].tolist()
-            # then redefine as numpy array
             self.model.reflectingBoundaryIndex = np.array(self.model.reflectingBoundaryIndex)
         #
         self.model.h_dof_old[:] = self.model.u[0].dof
@@ -567,9 +566,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         # To compute edge_based_cfl from within choose_dt of RKEV
         self.edge_based_cfl = np.zeros(self.u[0].dof.shape)
         self.dLow = None
-        self.hBT = None
-        self.huBT = None
-        self.hvBT = None
         # Old DOFs
         # NOTE (Mql): It is important to link h_dof_old by reference with u[0].dof (and so on).
         # This is because  I need the initial condition to be passed to them as well (before calling calculateResidual).
@@ -711,7 +707,16 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         # Global C Matrices (mql)
         self.cterm_global = None
         self.cterm_transpose_global = None
-        # For FCT
+        # For convex limiting
+        self.dH_minus_dL = None
+        self.muH_minus_muL = None
+        self.size_of_domain = None
+        self.hLow = None
+        self.huLow = None
+        self.hvLow = None
+        self.h_min = None
+        self.h_max = None
+        self.kin_max = None
         self.extendedSourceTerm_hu = None
         self.extendedSourceTerm_hv = None
         self.new_SourceTerm_hu = None
@@ -719,10 +724,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         # for EV
         self.dij_small = None
         self.global_entropy_residual = None
-
-        self.dH_minus_dL = None
-        self.muH_minus_muL = None
-        self.size_of_domain = None # for relaxation of bounds
         # NORMALS
         self.COMPUTE_NORMALS = 1
         self.normalx = None
@@ -903,12 +904,14 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["hEps"] = self.hEps
         argsDict["LUMPED_MASS_MATRIX"] = self.coefficients.LUMPED_MASS_MATRIX
         argsDict["dLow"] = self.dLow
-        argsDict["hBT"] = self.hBT
-        argsDict["huBT"] = self.huBT
-        argsDict["hvBT"] = self.hvBT
         argsDict["new_SourceTerm_hu"] = self.new_SourceTerm_hu
         argsDict["new_SourceTerm_hv"] = self.new_SourceTerm_hv
-        argsDict["size_of_domain"] = self.size_of_domain
+        argsDict["hLow"] = self.hLow
+        argsDict["huLow"] = self.huLow
+        argsDict["hvLow"] = self.hvLow
+        argsDict["h_min"] = self.h_min
+        argsDict["h_max"] = self.h_max
+        argsDict["kin_max"] = self.kin_max
         self.sw2d.convexLimiting(argsDict)
 
         # Pass the post processed hnp1 solution to global solution u
@@ -1206,14 +1209,17 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         # boundary Index: I do this in preStep since I need normalx and normaly to be initialized first
         # Allocate space for dLow (for the first stage in the SSP method)
         self.dLow = np.zeros(self.Cx.shape, 'd')
-        self.hBT = np.zeros(self.Cx.shape, 'd')
-        self.huBT = np.zeros(self.Cx.shape, 'd')
-        self.hvBT = np.zeros(self.Cx.shape, 'd')
         # get coordinates of DOFs
         self.getDOFsCoord()
         # some vectors for convex limiting
         self.dH_minus_dL = np.zeros(self.Cx.shape, 'd')
         self.muH_minus_muL = np.zeros(self.Cx.shape, 'd')
+        self.hLow = np.zeros(self.u[0].dof.shape, 'd')
+        self.huLow = np.zeros(self.u[0].dof.shape, 'd')
+        self.hvLow = np.zeros(self.u[0].dof.shape, 'd')
+        self.h_min = np.zeros(self.u[0].dof.shape, 'd')
+        self.h_max = np.zeros(self.u[0].dof.shape, 'd')
+        self.kin_max = np.zeros(self.u[0].dof.shape, 'd')
         self.extendedSourceTerm_hu = np.zeros(self.u[0].dof.shape, 'd')
         self.extendedSourceTerm_hv = np.zeros(self.u[0].dof.shape, 'd')
         self.new_SourceTerm_hu = np.zeros(self.u[0].dof.shape, 'd')
@@ -1226,6 +1232,31 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         N=self.u[0].femSpace.dofMap.nDOF_all_processes
         nghosts = self.u[0].par_dof.nghosts
         subdomain2global=self.u[0].femSpace.dofMap.subdomain2global
+        #
+        self.par_hLow = LAT.ParVec_petsc4py(self.hLow,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_huLow = LAT.ParVec_petsc4py(self.huLow,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_hvLow = LAT.ParVec_petsc4py(self.hvLow,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_h_min = LAT.ParVec_petsc4py(self.h_min,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_h_max = LAT.ParVec_petsc4py(self.h_max,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_kin_max = LAT.ParVec_petsc4py(self.kin_max,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
         #
         self.par_extendedSourceTerm_hu = LAT.ParVec_petsc4py(self.extendedSourceTerm_hu,
                                                 bs=1,
@@ -1243,6 +1274,7 @@ class LevelModel(proteus.Transport.OneLevelTransport):
                                                 bs=1,
                                                 n=n,N=N,nghosts=nghosts,
                                                 subdomain2global=subdomain2global)
+        #
         self.par_global_entropy_residual = LAT.ParVec_petsc4py(self.global_entropy_residual,
                                                 bs=1,
                                                 n=n,N=N,nghosts=nghosts,
@@ -1317,6 +1349,7 @@ class LevelModel(proteus.Transport.OneLevelTransport):
 
         # lets call calculate EV first and distribute
         self.computeEV()
+        self.par_global_entropy_residual.scatter_forward_insert()
 
         argsDict = cArgumentsDict.ArgumentsDict()
         argsDict["mesh_trial_ref"] = self.u[0].femSpace.elementMaps.psi
@@ -1428,20 +1461,31 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["normalx"] = self.normalx
         argsDict["normaly"] = self.normaly
         argsDict["dLow"] = self.dLow
-        argsDict["hBT"] = self.hBT
-        argsDict["huBT"] = self.huBT
-        argsDict["hvBT"] = self.hvBT
         argsDict["lstage"] = self.timeIntegration.lstage
         argsDict["new_SourceTerm_hu"] = self.new_SourceTerm_hu
         argsDict["new_SourceTerm_hv"] = self.new_SourceTerm_hv
         argsDict["global_entropy_residual"] = self.global_entropy_residual
         argsDict["dij_small"] = self.dij_small
+        argsDict["hLow"] = self.hLow
+        argsDict["huLow"] = self.huLow
+        argsDict["hvLow"] = self.hvLow
+        argsDict["h_min"] = self.h_min
+        argsDict["h_max"] = self.h_max
+        argsDict["kin_max"] = self.kin_max
+        argsDict["size_of_domain"] = self.size_of_domain
 
         # call calculate residual
-        self.par_global_entropy_residual.scatter_forward_insert()
         self.calculateResidual(argsDict)
 
-        # distribute source terms
+        # distribute local bounds and low order solutions (with bar states)
+        self.par_hLow.scatter_forward_insert()
+        self.par_huLow.scatter_forward_insert()
+        self.par_hvLow.scatter_forward_insert()
+        self.par_h_min.scatter_forward_insert()
+        self.par_h_max.scatter_forward_insert()
+        self.par_kin_max.scatter_forward_insert()
+
+        # distribute source terms (not sure if needed)
         self.par_extendedSourceTerm_hu.scatter_forward_insert()
         self.par_extendedSourceTerm_hv.scatter_forward_insert()
         self.par_new_SourceTerm_hu.scatter_forward_insert()
@@ -1525,9 +1569,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["h_dof"] = self.u[0].dof
         argsDict["hu_dof"] = self.u[1].dof
         argsDict["hv_dof"] = self.u[2].dof
-        argsDict["q_mass_acc_beta_bdf"] = self.timeIntegration.beta_bdf[0]
-        argsDict["q_mom_hu_acc_beta_bdf"] = self.timeIntegration.beta_bdf[1]
-        argsDict["q_mom_hv_acc_beta_bdf"] = self.timeIntegration.beta_bdf[2]
         argsDict["q_cfl"] = self.q[('cfl', 0)]
         argsDict["sdInfo_hu_hu_rowptr"] = self.coefficients.sdInfo[(1, 1)][0]
         argsDict["sdInfo_hu_hu_colind"] = self.coefficients.sdInfo[(1, 1)][1]
