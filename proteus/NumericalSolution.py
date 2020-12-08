@@ -1287,6 +1287,7 @@ class NS_base(object):  # (HasTraits):
                 for model in self.modelList:
                     for av in self.auxiliaryVariables[model.name]:
                         av.calculate()
+                        # quit()
                 if self.archiveFlag == ArchiveFlags.EVERY_SEQUENCE_STEP:
                     self.tCount+=1
                     for index,model in enumerate(self.modelList):

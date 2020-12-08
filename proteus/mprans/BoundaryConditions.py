@@ -1078,32 +1078,61 @@ class RelaxationZoneWaveGenerator:
         for l in range(nl):  # usually only 1
             # initialisation of variables before costly loop
             m = self.model.levelModelList[l]
-            nE = m.coefficients.q_phi.shape[0]
-            nk = m.coefficients.q_phi.shape[1]
-            t = m.timeIntegration.t
-            qx = m.q['x']
-            q_phi_porous = m.coefficients.q_phi_porous
-            q_velocity_porous = m.coefficients.q_velocity_porous
-            mTypes = m.mesh.elementMaterialTypes
-            # costly loop
-            for eN in range(nE):
-                mType = mTypes[eN]
-                if mType <= self.max_flag:
-                    zone = self.zones_array[mType]
-                    if zone is not None:
-                        for k in range(nk):
-                            x[0] = qx[eN, k, 0]
-                            x[1] = qx[eN, k, 1]
-                            x[2] = qx[eN, k, 2]
-                            phi = zone.calculate_phi(x)
-                            q_phi_porous[eN, k] = phi
-                            u = zone.calculate_vel(x, t)
-                            q_velocity_porous[eN, k, 0] = u[0]
-                            q_velocity_porous[eN, k, 1] = u[1]
-                            if self.nd > 2:
-                                q_velocity_porous[eN, k, 2] = u[2]
-            m.q['phi_porous'] = q_phi_porous
-            m.q['velocity_porous'] = q_velocity_porous
+            if (self.model.name is not 'GN_sw_p'):
+                nE = m.coefficients.q_phi.shape[0]
+                nk = m.coefficients.q_phi.shape[1]
+                t = m.timeIntegration.t
+                qx = m.q['x']
+                q_phi_porous = m.coefficients.q_phi_porous
+                q_velocity_porous = m.coefficients.q_velocity_porous
+                mTypes = m.mesh.elementMaterialTypes
+                # costly loop
+                for eN in range(nE):
+                    mType = mTypes[eN]
+                    if mType <= self.max_flag:
+                        zone = self.zones_array[mType]
+                        if zone is not None:
+                            for k in range(nk):
+                                x[0] = qx[eN, k, 0]
+                                x[1] = qx[eN, k, 1]
+                                x[2] = qx[eN, k, 2]
+                                phi = zone.calculate_phi(x)
+                                q_phi_porous[eN, k] = phi
+                                u = zone.calculate_vel(x, t)
+                                q_velocity_porous[eN, k, 0] = u[0]
+                                q_velocity_porous[eN, k, 1] = u[1]
+                                if self.nd > 2:
+                                    q_velocity_porous[eN, k, 2] = u[2]
+                m.q['phi_porous'] = q_phi_porous
+                m.q['velocity_porous'] = q_velocity_porous
+            else:
+                # define time, quadrature nodes, numElements, numQuadrature
+                t = m.timeIntegration.t
+                qx = m.q['x']
+                nE = qx.shape[0]
+                nk =  qx.shape[1]
+                mTypes = m.mesh.elementMaterialTypes
+                q_velocity_porous = m.coefficients.q_velocity_porous
+                # costly loop
+                for eN in range(nE):
+                    mType = mTypes[eN]
+                    if mType <= self.max_flag:
+                        zone = self.zones_array[mType]
+                        if zone is not None:
+                            for k in range(nk):
+                                x[0] = qx[eN, k, 0]
+                                x[1] = qx[eN, k, 1]
+                                x[2] = qx[eN, k, 2]
+                                if (x[2] > 0):
+                                    print('x[2] not 0 ')
+                                    quit()
+                                # phi = zone.calculate_phi(x)
+                                # q_phi_porous[eN, k] = phi
+                                u = zone.calculate_vel(x, t)
+                                q_velocity_porous[eN, k, 0] = u[0]
+                                q_velocity_porous[eN, k, 1] = u[2]
+                # m.q['phi_porous'] = q_phi_porous
+                m.q['velocity_porous'] = q_velocity_porous
 
 
 class __cppClass_WavesCharacteristics:

@@ -375,6 +375,7 @@ class Coefficients(proteus.TransportCoefficients.TC_base):
 
     def attachModels(self, modelList):
         self.model = modelList[self.modelIndex]
+        self.model.q['velocity_porous'] = self.q_velocity_porous
         # pass
 
     def initializeMesh(self, mesh):
@@ -386,7 +387,8 @@ class Coefficients(proteus.TransportCoefficients.TC_base):
             self.b.dof = self.bathymetry[0]([x, y])
 
     def initializeElementQuadrature(self, t, cq):
-        pass
+        self.q_velocity_porous = np.zeros(cq[('velocity', 0)].shape, 'd')
+        # pass
 
     def initializeElementBoundaryQuadrature(self, t, cebq, cebq_global):
         pass
@@ -2020,6 +2022,9 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         self.u[1].femSpace.getBasisValuesRef(self.elementQuadraturePoints)
         self.u[1].femSpace.getBasisGradientValuesRef(self.elementQuadraturePoints)
         self.coefficients.initializeElementQuadrature(self.timeIntegration.t, self.q)
+        # EJT EJT EJT
+        # print('qx ', self.q['x'], np.shape(self.q['x']))
+        # quit()
 
     def calculateElementBoundaryQuadrature(self):
         """
