@@ -25,23 +25,25 @@ namespace proteus {
 inline double GN_nu1(const double &g, const double &hL, const double &uL,
                      const double &etaL, const double &meshSizeL) {
 
-  double augL = LAMBDA_MGN / (3. * meshSizeL) * (6. * hL + 12. * (hL - etaL));
+  auto augL = LAMBDA_MGN / (3. * meshSizeL) * (6. * hL + 12. * (hL - etaL));
 
-  if (etaL >= hL) {
+  if (etaL >= hL)
     augL = LAMBDA_MGN / (3. * meshSizeL) * (6. * hL);
-  }
+
   augL = augL * std::pow(meshSizeL / fmax(meshSizeL, hL), 2);
 
   return uL - sqrt(g * hL) * sqrt(1. + augL);
 }
+
 inline double GN_nu3(const double &g, const double &hR, const double &uR,
                      const double &etaR, const double &meshSizeR) {
-  double augR = LAMBDA_MGN / (3. * meshSizeR) * (6. * hR + 12. * (hR - etaR));
 
-  if (etaR >= hR) {
+  auto augR = LAMBDA_MGN / (3. * meshSizeR) * (6. * hR + 12. * (hR - etaR));
+  if (etaR >= hR)
     augR = LAMBDA_MGN / (3. * meshSizeR) * (6. * hR);
-  }
+
   augR = augR * std::pow(meshSizeR / fmax(meshSizeR, hR), 2);
+
   return uR + sqrt(g * hR) * sqrt(1 + augR);
 }
 
@@ -81,7 +83,7 @@ inline double ENTROPY_FLUX2(const double &g, const double &h, const double &hu,
           g * h * z) *
          hv * one_over_hReg;
 }
-} // namespace proteus
+} // end namespace proteus
 
 namespace proteus {
 
@@ -113,37 +115,39 @@ public:
               << std::flush;
   }
 
-  inline double maxWaveSpeedSharpInitialGuess(double g, double nx, double ny,
-                                              double hL, double huL, double hvL,
-                                              double hetaL, double lumpedL,
-                                              double hR, double huR, double hvR,
-                                              double hetaR, double lumpedR,
-                                              double hEps) {
-    double lambda1, lambda3;
-    double one_over_hL = 2.0 * hL / (hL * hL + std::pow(fmax(hL, hEps), 2.0));
-    double one_over_hR = 2.0 * hR / (hR * hR + std::pow(fmax(hR, hEps), 2.0));
-    double hVelL = nx * huL + ny * hvL;
-    double hVelR = nx * huR + ny * hvR;
-    double velL = one_over_hL * hVelL;
-    double velR = one_over_hR * hVelR;
-    double etaL = 2.0 * hL / (hL * hL + std::pow(fmax(hL, hEps), 2)) * hetaL;
-    double etaR = 2.0 * hR / (hR * hR + std::pow(fmax(hR, hEps), 2)) * hetaR;
-    double meshSizeL = sqrt(lumpedL);
-    double meshSizeR = sqrt(lumpedR);
+  inline double maxWaveSpeedSharpInitialGuess(
+      const double &g, const double &nx, const double &ny, const double &hL,
+      const double &huL, const double &hvL, const double &hetaL,
+      const double &lumpedL, const double &hR, const double &huR,
+      const double &hvR, const double &hetaR, const double &lumpedR,
+      const double &hEps) {
+
+    const double one_over_hL =
+        2.0 * hL / (hL * hL + std::pow(fmax(hL, hEps), 2.0));
+    const double one_over_hR =
+        2.0 * hR / (hR * hR + std::pow(fmax(hR, hEps), 2.0));
+    const double hVelL = nx * huL + ny * hvL;
+    const double hVelR = nx * huR + ny * hvR;
+    const double velL = one_over_hL * hVelL;
+    const double velR = one_over_hR * hVelR;
+    const double etaL = one_over_hL * hetaL;
+    const double etaR = one_over_hR * hetaR;
+    const double meshSizeL = sqrt(lumpedL);
+    const double meshSizeR = sqrt(lumpedR);
 
     /* See equation 4.12 JCP 2019 paper:
       1-eigenvalue: uL-sqrt(g*hL)*sqrt(1 + augL)
       3-eigenvalue: uR+sqrt(g*hR)*sqrt(1 + augR)
     */
-    lambda1 = GN_nu1(g, hL, velL, etaL, meshSizeL);
-    lambda3 = GN_nu3(g, hR, velR, etaR, meshSizeR);
+    const double lambda1 = GN_nu1(g, hL, velL, etaL, meshSizeL);
+    const double lambda3 = GN_nu3(g, hR, velR, etaR, meshSizeR);
 
     return fmax(fabs(lambda1), fabs(lambda3));
   }
 
   inline void calculateCFL(const double &elementDiameter, const double &g,
                            const double &h, const double &hu, const double &hv,
-                           const double hEps, double &cfl) {
+                           const double &hEps, double &cfl) {
     double cflx, cfly, c = sqrt(fmax(g * hEps, g * h));
     double u = 2 * h / (h * h + std::pow(fmax(h, hEps), 2)) * hu;
     double v = 2 * h / (h * h + std::pow(fmax(h, hEps), 2)) * hv;
@@ -232,7 +236,8 @@ public:
     xt::pyarray<double> &heta_min = args.array<double>("heta_min");
     xt::pyarray<double> &heta_max = args.array<double>("heta_max");
     xt::pyarray<double> &kin_max = args.array<double>("kin_max");
-    double KE_tiny = args.scalar<double>("KE_tiny");
+
+    const double KE_tiny = args.scalar<double>("KE_tiny");
 
     // Create some vectors for limiting on h and h*eta
     std::valarray<double> Rneg(0.0, numDOFs), Rpos(0.0, numDOFs),
@@ -250,22 +255,22 @@ public:
     int ij = 0;
     for (int i = 0; i < numDOFs; i++) {
       // Read some vectors
-      double high_order_hnp1i = high_order_hnp1[i];
-      double high_order_hunp1i = high_order_hunp1[i];
-      double high_order_hvnp1i = high_order_hvnp1[i];
-      double high_order_hetanp1i = high_order_hetanp1[i];
-      double high_order_hwnp1i = high_order_hwnp1[i];
-      double high_order_hbetanp1i = high_order_hbetanp1[i];
-      double hi = h_old[i];
-      double huni = hu_old[i];
-      double hvni = hv_old[i];
-      double hetani = heta_old[i];
-      double hwni = hw_old[i];
-      double hbetani = hbeta_old[i];
-      double Zi = b_dof[i];
-      double mi = lumped_mass_matrix[i];
-      double one_over_hiReg =
-          2 * hi / (hi * hi + std::pow(fmax(hi, hEps), 2)); // hEps
+      const double high_order_hnp1i = high_order_hnp1[i];
+      const double high_order_hunp1i = high_order_hunp1[i];
+      const double high_order_hvnp1i = high_order_hvnp1[i];
+      const double high_order_hetanp1i = high_order_hetanp1[i];
+      const double high_order_hwnp1i = high_order_hwnp1[i];
+      const double high_order_hbetanp1i = high_order_hbetanp1[i];
+      const double hi = h_old[i];
+      const double huni = hu_old[i];
+      const double hvni = hv_old[i];
+      const double hetani = heta_old[i];
+      const double hwni = hw_old[i];
+      const double hbetani = hbeta_old[i];
+      const double Zi = b_dof[i];
+      const double mi = lumped_mass_matrix[i];
+      const double one_over_hi =
+          2. * hi / (hi * hi + std::pow(fmax(hi, hEps), 2)); // hEps
 
       // LOOP OVER THE SPARSITY PATTERN (j-LOOP)//
       for (int offset = csrRowIndeces_DofLoops[i];
@@ -275,35 +280,36 @@ public:
 
         if (i != j) {
           // Read some vectors
-          double hj = h_old[j];
-          double hunj = hu_old[j];
-          double hvnj = hv_old[j];
-          double hetanj = heta_old[j];
-          double hwnj = hw_old[j];
-          double hbetanj = hbeta_old[j];
-          double Zj = b_dof[j];
-          double one_over_hjReg =
+          const double hj = h_old[j];
+          const double hunj = hu_old[j];
+          const double hvnj = hv_old[j];
+          const double hetanj = heta_old[j];
+          const double hwnj = hw_old[j];
+          const double hbetanj = hbeta_old[j];
+          const double Zj = b_dof[j];
+          const double one_over_hj =
               2. * hj / (hj * hj + std::pow(fmax(hj, hEps), 2));
 
           // Compute star states
-          double hStarij = fmax(0., hi + Zi - fmax(Zi, Zj));
-          double huStarij = huni * hStarij * one_over_hiReg;
-          double hvStarij = hvni * hStarij * one_over_hiReg;
-          double hetaStarij = hetani * std::pow(hStarij * one_over_hiReg, 2);
-          double hwStarij = hwni * hStarij * one_over_hiReg;
-          double hbetaStarij = hbetani * hStarij * one_over_hiReg;
+          const double hStarij = fmax(0., hi + Zi - fmax(Zi, Zj));
+          const double huStarij = huni * hStarij * one_over_hi;
+          const double hvStarij = hvni * hStarij * one_over_hi;
+          const double hetaStarij = hetani * std::pow(hStarij * one_over_hi, 2);
+          const double hwStarij = hwni * hStarij * one_over_hi;
+          const double hbetaStarij = hbetani * hStarij * one_over_hi;
 
-          double hStarji = fmax(0., hj + Zj - fmax(Zi, Zj));
-          double huStarji = hunj * hStarji * one_over_hjReg;
-          double hvStarji = hvnj * hStarji * one_over_hjReg;
-          double hetaStarji = hetanj * std::pow(hStarji * one_over_hjReg, 2);
-          double hwStarji = hwnj * hStarji * one_over_hjReg;
-          double hbetaStarji = hbetanj * hStarji * one_over_hjReg;
+          const double hStarji = fmax(0., hj + Zj - fmax(Zi, Zj));
+          const double huStarji = hunj * hStarji * one_over_hj;
+          const double hvStarji = hvnj * hStarji * one_over_hj;
+          const double hetaStarji = hetanj * std::pow(hStarji * one_over_hj, 2);
+          const double hwStarji = hwnj * hStarji * one_over_hj;
+          const double hbetaStarji = hbetanj * hStarji * one_over_hj;
 
           // i-th row of flux correction matrix
-          double ML_minus_MC = (LUMPED_MASS_MATRIX == 1
-                                    ? 0.
-                                    : (i == j ? 1. : 0.) * mi - MassMatrix[ij]);
+          const double ML_minus_MC =
+              (LUMPED_MASS_MATRIX == 1
+                   ? 0.
+                   : (i == j ? 1. : 0.) * mi - MassMatrix[ij]);
 
           FCT_h[ij] =
               ML_minus_MC *
@@ -2782,7 +2788,7 @@ public:
       }   // i
     }     // elements
   }
-}; // namespace proteus
+}; // End GN_SW2DCV class
 
 inline GN_SW2DCV_base *
 newGN_SW2DCV(int nSpaceIn, int nQuadraturePoints_elementIn,
