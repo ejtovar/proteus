@@ -87,7 +87,7 @@ It's often okay to take hbeta=0. Note that the BCs for the heta and hw should be
 and BCs for hbeta should be same as x_mom.
 For more details see: 'Hyperbolic relaxation technique for solving the dispersive Serre Equations
 with topography' by Guermond, Popov, Tovar, Kees.
-"""        
+"""
 
 class heta_at_t0(object):
     def uOfXT(self, X, t):
