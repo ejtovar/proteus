@@ -84,7 +84,6 @@ class RKEV(proteus.TimeIntegration.SSP):
         argsDict["hu_dof_old"] = self.transport.u[1].dof
         argsDict["hv_dof_old"] = self.transport.u[2].dof
         argsDict["heta_dof_old"] = self.transport.u[3].dof
-        argsDict["b_dof"] = self.transport.coefficients.b.dof
         argsDict["csrRowIndeces_DofLoops"] = rowptr_cMatrix
         argsDict["csrColumnOffsets_DofLoops"] = colind_cMatrix
         argsDict["hEps"] = self.transport.hEps
@@ -783,6 +782,7 @@ class LevelModel(proteus.Transport.OneLevelTransport):
 
         # hEps: this is use to regularize the flux and re-define the dry states
         self.eps = None
+        self.hMax = None
         self.hEps = None
         self.hReg = None
         self.ML = None  # lumped mass matrix
@@ -1062,7 +1062,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["h_dof_old"] = self.h_dof_old
         argsDict["hu_dof_old"] = self.hu_dof_old
         argsDict["hv_dof_old"] = self.hv_dof_old
-        argsDict["b_dof"] = self.coefficients.b.dof
         argsDict["Cx"] = self.Cx
         argsDict["Cy"] = self.Cy
         argsDict["CTx"] = self.CTx
@@ -1071,7 +1070,7 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["csrRowIndeces_DofLoops"] = self.rowptr_cMatrix
         argsDict["csrColumnOffsets_DofLoops"] = self.colind_cMatrix
         argsDict["lumped_mass_matrix"] = self.ML
-        argsDict["eps"] = self.eps
+        argsDict["hMax"] = self.hMax
         argsDict["hEps"] = self.hEps
         argsDict["global_entropy_residual"] = self.global_entropy_residual
         argsDict["dij_small"] = small
@@ -1344,7 +1343,8 @@ class LevelModel(proteus.Transport.OneLevelTransport):
 
         # hEps
         self.eps = 1E-5
-        self.hEps = self.eps * comm.globalMax(self.u[0].dof.max())
+        self.hMax = comm.globalMax(self.u[0].dof.max())
+        self.hEps = self.eps * self.hMax
 
         # size_of_domain used in relaxation of bounds
         self.size_of_domain = self.mesh.globalMesh.volume
@@ -1637,23 +1637,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["exteriorElementBoundariesArray"] = self.mesh.exteriorElementBoundariesArray
         argsDict["elementBoundaryElementsArray"] = self.mesh.elementBoundaryElementsArray
         argsDict["elementBoundaryLocalElementBoundariesArray"] = self.mesh.elementBoundaryLocalElementBoundariesArray
-        argsDict["isDOFBoundary_h"] = self.numericalFlux.isDOFBoundary[0]
-        argsDict["isDOFBoundary_hu"] = self.numericalFlux.isDOFBoundary[1]
-        argsDict["isDOFBoundary_hv"] = self.numericalFlux.isDOFBoundary[2]
-        argsDict["isAdvectiveFluxBoundary_h"] = self.ebqe[('advectiveFlux_bc_flag', 0)]
-        argsDict["isAdvectiveFluxBoundary_hu"] = self.ebqe[('advectiveFlux_bc_flag', 1)]
-        argsDict["isAdvectiveFluxBoundary_hv"] = self.ebqe[('advectiveFlux_bc_flag', 2)]
-        argsDict["isDiffusiveFluxBoundary_hu"] = self.ebqe[('diffusiveFlux_bc_flag', 1, 1)]
-        argsDict["isDiffusiveFluxBoundary_hv"] = self.ebqe[('diffusiveFlux_bc_flag', 2, 2)]
-        argsDict["ebqe_bc_h_ext"] = self.numericalFlux.ebqe[('u', 0)]
-        argsDict["ebqe_bc_flux_mass_ext"] = self.ebqe[('advectiveFlux_bc', 0)]
-        argsDict["ebqe_bc_flux_mom_hu_adv_ext"] = self.ebqe[('advectiveFlux_bc', 1)]
-        argsDict["ebqe_bc_flux_mom_hv_adv_ext"] = self.ebqe[('advectiveFlux_bc', 2)]
-        argsDict["ebqe_bc_hu_ext"] = self.numericalFlux.ebqe[('u', 1)]
-        argsDict["ebqe_bc_flux_hu_diff_ext"] = self.ebqe[('diffusiveFlux_bc', 1, 1)]
-        argsDict["ebqe_penalty_ext"] = self.ebqe[('penalty')]
-        argsDict["ebqe_bc_hv_ext"] = self.numericalFlux.ebqe[('u', 2)]
-        argsDict["ebqe_bc_flux_hv_diff_ext"] = self.ebqe[('diffusiveFlux_bc', 2, 2)]
         argsDict["q_velocity"] = self.q[('velocity', 0)]
         argsDict["ebqe_velocity"] = self.ebqe[('velocity', 0)]
         argsDict["flux"] = self.ebq_global[('totalFlux', 0)]
@@ -1668,7 +1651,7 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["csrColumnOffsets_DofLoops"] = self.colind_cMatrix
         argsDict["lumped_mass_matrix"] = self.ML
         argsDict["cfl_run"] = self.timeIntegration.runCFL
-        argsDict["eps"] = self.eps
+        argsDict["hMax"] = self.hMax
         argsDict["hEps"] = self.hEps
         argsDict["hnp1_at_quad_point"] = self.q[('u', 0)]
         argsDict["hunp1_at_quad_point"] = self.q[('u', 1)]
@@ -1912,23 +1895,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["exteriorElementBoundariesArray"] = self.mesh.exteriorElementBoundariesArray
         argsDict["elementBoundaryElementsArray"] = self.mesh.elementBoundaryElementsArray
         argsDict["elementBoundaryLocalElementBoundariesArray"] = self.mesh.elementBoundaryLocalElementBoundariesArray
-        argsDict["isDOFBoundary_h"] = self.numericalFlux.isDOFBoundary[0]
-        argsDict["isDOFBoundary_hu"] = self.numericalFlux.isDOFBoundary[1]
-        argsDict["isDOFBoundary_hv"] = self.numericalFlux.isDOFBoundary[2]
-        argsDict["isAdvectiveFluxBoundary_h"] = self.ebqe[('advectiveFlux_bc_flag', 0)]
-        argsDict["isAdvectiveFluxBoundary_hu"] = self.ebqe[('advectiveFlux_bc_flag', 1)]
-        argsDict["isAdvectiveFluxBoundary_hv"] = self.ebqe[('advectiveFlux_bc_flag', 2)]
-        argsDict["isDiffusiveFluxBoundary_hu"] = self.ebqe[('diffusiveFlux_bc_flag', 1, 1)]
-        argsDict["isDiffusiveFluxBoundary_hv"] = self.ebqe[('diffusiveFlux_bc_flag', 2, 2)]
-        argsDict["ebqe_bc_h_ext"] = self.numericalFlux.ebqe[('u', 0)]
-        argsDict["ebqe_bc_flux_mass_ext"] = self.ebqe[('advectiveFlux_bc', 0)]
-        argsDict["ebqe_bc_flux_mom_hu_adv_ext"] = self.ebqe[('advectiveFlux_bc', 1)]
-        argsDict["ebqe_bc_flux_mom_hv_adv_ext"] = self.ebqe[('advectiveFlux_bc', 2)]
-        argsDict["ebqe_bc_hu_ext"] = self.numericalFlux.ebqe[('u', 1)]
-        argsDict["ebqe_bc_flux_hu_diff_ext"] = self.ebqe[('diffusiveFlux_bc', 1, 1)]
-        argsDict["ebqe_penalty_ext"] = self.ebqe[('penalty')]
-        argsDict["ebqe_bc_hv_ext"] = self.numericalFlux.ebqe[('u', 2)]
-        argsDict["ebqe_bc_flux_hv_diff_ext"] = self.ebqe[('diffusiveFlux_bc', 2, 2)]
         argsDict["csrColumnOffsets_eb_h_h"] = self.csrColumnOffsets_eb[(0, 0)]
         argsDict["csrColumnOffsets_eb_h_hu"] = self.csrColumnOffsets_eb[(0, 1)]
         argsDict["csrColumnOffsets_eb_h_hv"] = self.csrColumnOffsets_eb[(0, 2)]
