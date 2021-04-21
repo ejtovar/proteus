@@ -49,50 +49,34 @@ inline double GN_nu3(const double &g, const double &hR, const double &uR,
 }
 
 // FOR CELL BASED ENTROPY VISCOSITY
-inline double ENTROPY(const double &g, const double &h, const double &hu,
-                      const double &hv, const double &z,
-                      const double &one_over_hReg) {
-  return 0.5 *
-         (g * h * h + one_over_hReg * (hu * hu + hv * hv) + 2. * g * h * z);
+inline double ENTROPY(const double &g, const double &h, const double &u,
+                      const double &v, const double &z) {
+  return 0.5 * (g * h * h + h * (u * u + v * v) + 2. * g * h * z);
 }
-inline double DENTROPY_DH(const double &g, const double &h, const double &hu,
-                          const double &hv, const double &z,
-                          const double &one_over_hReg) {
-  return g * h - 0.5 * (hu * hu + hv * hv) * pow(one_over_hReg, 2) + g * z;
+inline double DENTROPY_DH(const double &g, const double &h, const double &u,
+                          const double &v, const double &z) {
+  return g * h - 0.5 * (u * u + v * v) + g * z;
 }
 
-inline double DENTROPY_DHU(const double &g, const double &h, const double &hu,
-                           const double &hv, const double &z,
-                           const double &one_over_hReg) {
-  return hu * one_over_hReg;
+inline double ENTROPY_FLUX1(const double &g, const double &h, const double &u,
+                            const double &v, const double &z) {
+  return (ENTROPY(g, h, u, v, z) + 0.5 * g * h * h + g * h * z) * u;
 }
 
-inline double DENTROPY_DHV(const double &g, const double &h, const double &hu,
-                           const double &hv, const double &z,
-                           const double &one_over_hReg) {
-  return hv * one_over_hReg;
-}
-
-inline double ENTROPY_FLUX1(const double &g, const double &h, const double &hu,
-                            const double &hv, const double &z,
-                            const double &one_over_hReg) {
-  return (ENTROPY(g, h, hu, hv, z, one_over_hReg) + 0.5 * g * h * h +
-          g * h * z) *
-         hu * one_over_hReg;
-}
-
-inline double ENTROPY_FLUX2(const double &g, const double &h, const double &hu,
-                            const double &hv, const double &z,
-                            const double &one_over_hReg) {
-  return (ENTROPY(g, h, hu, hv, z, one_over_hReg) + 0.5 * g * h * h +
-          g * h * z) *
-         hv * one_over_hReg;
+inline double ENTROPY_FLUX2(const double &g, const double &h, const double &u,
+                            const double &v, const double &z) {
+  return (ENTROPY(g, h, u, v, z) + 0.5 * g * h * h + g * h * z) * v;
 }
 
 inline double one_over_h(const double &h, const double &hEps) {
   const double max = std::max(h, hEps);
   const double denominator = h * h + max * max;
   return 2. * h / denominator;
+}
+
+inline double kinetic_energy(const double &h, const double &u,
+                             const double &v) {
+  return 0.5 * h * (u * u + v * v);
 }
 
 } // namespace proteus
@@ -244,6 +228,11 @@ public:
     xt::pyarray<double> &heta_min = args.array<double>("heta_min");
     xt::pyarray<double> &heta_max = args.array<double>("heta_max");
     xt::pyarray<double> &kin_max = args.array<double>("kin_max");
+    xt::pyarray<double> &delta_Sqd_h = args.array<double>("delta_Sqd_h");
+    xt::pyarray<double> &delta_Sqd_heta = args.array<double>("delta_Sqd_heta");
+    xt::pyarray<double> &delta_Sqd_kin = args.array<double>("delta_Sqd_kin");
+    xt::pyarray<double> &urelax = args.array<double>("urelax");
+    xt::pyarray<double> &drelax = args.array<double>("drelax");
 
     const double KE_tiny = args.scalar<double>("KE_tiny");
 
@@ -257,11 +246,16 @@ public:
         FCT_heta(0.0, dH_minus_dL.size()), FCT_hw(0.0, dH_minus_dL.size()),
         FCT_hbeta(0.0, dH_minus_dL.size());
 
+    double bar_deltaSqd_h_i = 0.;
+    double bar_deltaSqd_heta_i = 0.;
+    double bar_deltaSqd_kin_i = 0.;
+
     ////////////////////////////////////////////////////
     // Loop to define FCT matrices for each component //
     ////////////////////////////////////////////////////
     int ij = 0;
     for (unsigned int i = 0; i < numDOFs; i++) {
+
       // Read some vectors
       const double high_order_hnp1i = high_order_hnp1[i];
       const double high_order_hunp1i = high_order_hunp1[i];
@@ -354,6 +348,13 @@ public:
                           dt * (dH_minus_dL[ij] - muH_minus_muL[ij]) *
                               (hbetaStarji - hbetaStarij) +
                           dt * muH_minus_muL[ij] * (hbetanj - hbetani);
+
+          /* for relaxation of bounds */
+          bar_deltaSqd_h_i += 0.5 * delta_Sqd_h[j] + 0.5 * delta_Sqd_h[i];
+          bar_deltaSqd_heta_i +=
+              0.5 * delta_Sqd_heta[j] + 0.5 * delta_Sqd_heta[i];
+          bar_deltaSqd_kin_i += 0.5 * delta_Sqd_kin[j] + 0.5 * delta_Sqd_kin[i];
+
         } else {
           FCT_h[ij] = 0.0;
           FCT_hu[ij] = 0.0;
@@ -366,7 +367,30 @@ public:
         // UPDATE ij //
         ij += 1;
       } // j loop ends here
-    }   // i loop ends here
+
+      /* then divide by factor */
+      bar_deltaSqd_h_i =
+          bar_deltaSqd_h_i /
+          (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i] - 1) / 2.0;
+      bar_deltaSqd_heta_i =
+          bar_deltaSqd_heta_i /
+          (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i] - 1) / 2.0;
+      bar_deltaSqd_kin_i =
+          bar_deltaSqd_kin_i /
+          (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i] - 1) / 2.0;
+
+      /* Here we do the relaxation of the bounds */
+      kin_max[i] = fmin(urelax[i] * kin_max[i],
+                        kin_max[i] + std::abs(bar_deltaSqd_kin_i));
+      h_min[i] =
+          fmax(drelax[i] * h_min[i], h_min[i] - std::abs(bar_deltaSqd_h_i));
+      h_max[i] =
+          fmin(urelax[i] * h_max[i], h_max[i] + std::abs(bar_deltaSqd_h_i));
+      heta_min[i] = fmax(drelax[i] * heta_min[i],
+                         heta_min[i] - std::abs(bar_deltaSqd_heta_i));
+      heta_max[i] = fmin(urelax[i] * heta_max[i],
+                         heta_max[i] + std::abs(bar_deltaSqd_heta_i));
+    } // i loop ends here
 
     ////////////////////////////////////////////////////////////////////
     // Main loop to define limiters and computed limited solution //////
@@ -740,6 +764,7 @@ public:
     xt::pyarray<double> &h_dof_old = args.array<double>("h_dof_old");
     xt::pyarray<double> &hu_dof_old = args.array<double>("hu_dof_old");
     xt::pyarray<double> &hv_dof_old = args.array<double>("hv_dof_old");
+    xt::pyarray<double> &heta_dof_old = args.array<double>("heta_dof_old");
     xt::pyarray<double> &Cx = args.array<double>("Cx");
     xt::pyarray<double> &Cy = args.array<double>("Cy");
     xt::pyarray<double> &CTx = args.array<double>("CTx");
@@ -756,6 +781,9 @@ public:
     xt::pyarray<double> &global_entropy_residual =
         args.array<double>("global_entropy_residual");
     double &dij_small = args.scalar<double>("dij_small");
+    xt::pyarray<double> &delta_Sqd_h = args.array<double>("delta_Sqd_h");
+    xt::pyarray<double> &delta_Sqd_heta = args.array<double>("delta_Sqd_heta");
+    xt::pyarray<double> &delta_Sqd_kin = args.array<double>("delta_Sqd_kin");
 
     ///////////////////////////////////////////////
     // ********** LOOP ON DOFs ********** //
@@ -777,11 +805,16 @@ public:
       const double &hi = h_dof_old[i];
       const double &hui = hu_dof_old[i];
       const double &hvi = hv_dof_old[i];
+      const double &hetai = heta_dof_old[i];
+
       const double ui = hui * one_over_h(hi, hEps);
       const double vi = hvi * one_over_h(hi, hEps);
 
+      // get kinetic energy at ith node for relaxation terms
+      const double kin_i = kinetic_energy(hi, ui, vi);
+
       // Get entropy eta_i at ith node
-      const double eta_i = ENTROPY(g, hi, hui, hvi, 0., one_over_hiReg);
+      const double eta_i = ENTROPY(g, hi, ui, vi, 0.);
 
       // initialize etaMax and etaMin
       double etaMax = fabs(eta_i);
@@ -792,12 +825,14 @@ public:
       double entropy_flux = 0.;
       double sum_entprime_flux = 0.;
 
-      const double eta_prime1 =
-          DENTROPY_DH(g, hi, hui, hvi, 0., one_over_hiReg);
-      const double eta_prime2 =
-          DENTROPY_DHU(g, hi, hui, hvi, 0., one_over_hiReg);
-      const double eta_prime3 =
-          DENTROPY_DHV(g, hi, hui, hvi, 0., one_over_hiReg);
+      const double eta_prime1 = DENTROPY_DH(g, hi, ui, vi, 0.);
+      const double eta_prime2 = ui;
+      const double eta_prime3 = vi;
+
+      // initialize relaxation terms to 0
+      delta_Sqd_h = 0.;
+      delta_Sqd_heta = 0.;
+      delta_Sqd_kin = 0.;
 
       // loop in j (sparsity pattern)
       for (int offset = csrRowIndeces_DofLoops[i];
@@ -806,24 +841,26 @@ public:
         int j = csrColumnOffsets_DofLoops[offset];
 
         // solution at time tn for the jth DOF
-        double hj = h_dof_old[j];
-        double huj = hu_dof_old[j];
-        double hvj = hv_dof_old[j];
+        const double &hj = h_dof_old[j];
+        const double &huj = hu_dof_old[j];
+        const double &hvj = hv_dof_old[j];
+        const double &hetaj = heta_dof_old[j];
 
-        // Then define some things here using above
-        double one_over_hjReg = one_over_h(hj, hEps);
-        double uj = huj * one_over_hjReg;
-        double vj = hvj * one_over_hjReg;
+        double uj = huj * one_over_h(hj, hEps);
+        double vj = hvj * one_over_h(hj, hEps);
+
+        // get kinetic energy at jth node for relaxation terms
+        const double kin_j = kinetic_energy(hj, uj, vj);
 
         // Get entropy eta_j at jth node
-        const double eta_j = ENTROPY(g, hj, huj, hvj, 0., one_over_hjReg);
+        const double eta_j = ENTROPY(g, hj, uj, vj, 0.);
 
         // auxiliary functions to compute fluxes
-        double aux_h =
+        const double aux_h =
             (uj * hj - ui * hi) * Cx[ij] + (vj * hj - vi * hi) * Cy[ij];
-        double aux_hu =
+        const double aux_hu =
             (uj * huj - ui * hui) * Cx[ij] + (vj * huj - vi * hui) * Cy[ij];
-        double aux_hv =
+        const double aux_hv =
             (uj * hvj - ui * hvi) * Cx[ij] + (vj * hvj - vi * hvi) * Cy[ij];
 
         // flux for entropy
@@ -832,9 +869,8 @@ public:
         ith_flux_term3 += aux_hv + 0.5 * g * hj * hj * Cy[ij];
 
         // NOTE: WE CONSIDER FLAT BOTTOM
-        entropy_flux +=
-            (Cx[ij] * ENTROPY_FLUX1(g, hj, huj, hvj, 0., one_over_hjReg) +
-             Cy[ij] * ENTROPY_FLUX2(g, hj, huj, hvj, 0., one_over_hjReg));
+        entropy_flux += (Cx[ij] * ENTROPY_FLUX1(g, hj, uj, vj, 0.) +
+                         Cy[ij] * ENTROPY_FLUX2(g, hj, uj, vj, 0.));
 
         // COMPUTE ETA fmin AND ETA MAX //
         etaMax = fmax(etaMax, fabs(eta_j));
@@ -846,6 +882,12 @@ public:
 
         // update ij
         ij += 1;
+
+        if (i != j) {
+          delta_Sqd_h[i] += hi - hj;
+          delta_Sqd_heta[i] += hetai - hetaj;
+          delta_Sqd_kin[i] += kin_i - kin_j;
+        }
 
       } // end j loop
 
@@ -862,6 +904,7 @@ public:
       double one_over_entNormFactori = 1.0 / rescale;
       global_entropy_residual[i] =
           one_over_entNormFactori * fabs(entropy_flux - sum_entprime_flux);
+
       if (hi <= hEps) {
         global_entropy_residual[i] = 1.0;
       }
@@ -1048,9 +1091,6 @@ public:
     xt::pyarray<double> &heta_min = args.array<double>("heta_min");
     xt::pyarray<double> &heta_max = args.array<double>("heta_max");
     xt::pyarray<double> &kin_max = args.array<double>("kin_max");
-    double size_of_domain = args.scalar<double>("size_of_domain");
-    xt::pyarray<double> &urelax = args.array<double>("urelax");
-    xt::pyarray<double> &drelax = args.array<double>("drelax");
 
     //////////////////////////////////////
     // ********** CELL LOOPS ********** //
@@ -1183,12 +1223,6 @@ public:
       //     * Low order solution (in terms of bar states)
 
       // Here we declare some arrays for local bounds
-      std::valarray<double> delta_Sqd_h(0.0, numDOFsPerEqn),
-          bar_deltaSqd_h(0.0, numDOFsPerEqn),
-          delta_Sqd_heta(0.0, numDOFsPerEqn),
-          bar_deltaSqd_heta(0.0, numDOFsPerEqn),
-          delta_Sqd_kin(0.0, numDOFsPerEqn),
-          bar_deltaSqd_kin(0.0, numDOFsPerEqn);
       xt::pyarray<double> kin(numDOFsPerEqn), max_of_h_and_hEps(numDOFsPerEqn);
 
       // Define kinetic energy, kin = 1/2 q^2 / h
@@ -1196,22 +1230,6 @@ public:
       kin = 0.5 * (hu_dof_old * hu_dof_old + hv_dof_old * hv_dof_old);
       kin *= 2.0 * h_dof_old /
              (h_dof_old * h_dof_old + max_of_h_and_hEps * max_of_h_and_hEps);
-
-      /* First loop to define: delta_Sqd_h, delta_Sqd_heta, delta_Sqd_kin */
-      for (int i = 0; i < numDOFsPerEqn; i++) {
-
-        for (int offset = csrRowIndeces_DofLoops[i];
-             offset < csrRowIndeces_DofLoops[i + 1]; offset++) {
-
-          int j = csrColumnOffsets_DofLoops[offset];
-
-          if (i != j) {
-            delta_Sqd_h[i] += h_dof_old[i] - h_dof_old[j];
-            delta_Sqd_heta[i] += heta_dof_old[i] - heta_dof_old[j];
-            delta_Sqd_kin[i] += kin[i] - kin[j];
-          }
-        } // j loop ends here
-      }   // i loops ends here
 
       // Stuff for bar states here (BT = BarTilde)
       std::valarray<double> hBT(0.0, dH_minus_dL.size()),
@@ -1285,17 +1303,9 @@ public:
             }
           }
 
-          // for bar_deltaSqd_h, bar_deltaSqd_heta, bar_deltaSqd_kin
           double muLowij = 0., muLij = 0., dLowij = 0., dLij = 0.;
 
           if (i != j) {
-            // Put these computations first  before it gets messy
-            bar_deltaSqd_h[i] += 0.5 * delta_Sqd_h[j] + 0.5 * delta_Sqd_h[i];
-            bar_deltaSqd_heta[i] +=
-                0.5 * delta_Sqd_heta[j] + 0.5 * delta_Sqd_heta[i];
-            bar_deltaSqd_kin[i] +=
-                0.5 * delta_Sqd_kin[j] + 0.5 * delta_Sqd_kin[i];
-
             if (lstage == 0)
               dLowij = dLow[ij];
             else {
@@ -1418,20 +1428,6 @@ public:
           ij += 1;
         } // j loop ends here
 
-        // for bar_deltaSqd_h, bar_deltaSqd_heta, bar_deltaSqd_kin
-        bar_deltaSqd_h[i] =
-            bar_deltaSqd_h[i] /
-            (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i] - 1) /
-            2.0;
-        bar_deltaSqd_heta[i] =
-            bar_deltaSqd_heta[i] /
-            (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i] - 1) /
-            2.0;
-        bar_deltaSqd_kin[i] =
-            bar_deltaSqd_kin[i] /
-            (csrRowIndeces_DofLoops[i + 1] - csrRowIndeces_DofLoops[i] - 1) /
-            2.0;
-
       } // i loops ends here
 
       /* Then final loop of first set to get local bounds */
@@ -1494,19 +1490,6 @@ public:
           // UPDATE ij //
           ij += 1;
         } // j loop ends here
-
-        // Then do relaxation of bounds here. If confused, see convex
-        // limiting paper
-        kin_max[i] = fmin(urelax[i] * kin_max[i],
-                          kin_max[i] + std::abs(bar_deltaSqd_kin[i]));
-        h_min[i] =
-            fmax(drelax[i] * h_min[i], h_min[i] - std::abs(bar_deltaSqd_h[i]));
-        h_max[i] =
-            fmin(urelax[i] * h_max[i], h_max[i] + std::abs(bar_deltaSqd_h[i]));
-        heta_min[i] = fmax(drelax[i] * heta_min[i],
-                           heta_min[i] - std::abs(bar_deltaSqd_heta[i]));
-        heta_max[i] = fmin(urelax[i] * heta_max[i],
-                           heta_max[i] + std::abs(bar_deltaSqd_heta[i]));
 
         // clean up hLow from round off error
         if (hLow[i] < hEps) {

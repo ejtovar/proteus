@@ -810,6 +810,9 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         self.heta_max = None
         self.kin_max = None
         self.KE_tiny = None
+        self.delta_Sqd_h = None
+        self.delta_Sqd_heta = None
+        self.delta_Sqd_kin = None
         #
         self.extendedSourceTerm_hu = None
         self.extendedSourceTerm_hv = None
@@ -1043,6 +1046,11 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["heta_max"] = self.heta_max
         argsDict["kin_max"] = self.kin_max
         argsDict["KE_tiny"] = self.KE_tiny
+        argsDict["delta_Sqd_h"] = self.delta_Sqd_h
+        argsDict["delta_Sqd_heta"] = self.delta_Sqd_heta
+        argsDict["delta_Sqd_kin"] = self.delta_Sqd_kin
+        argsDict["urelax"] = self.urelax
+        argsDict["drelax"] = self.drelax
         self.dsw_2d.convexLimiting(argsDict)
 
         # Pass the post processed hnp1 solution to global solution u
@@ -1054,7 +1062,7 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         self.timeIntegration.u[hbetaIndex] = limited_hbetanp1
 
     def computeEV(self):
-        entropy_residual = np.zeros(self.u[0].dof.shape)
+        # for dij_small
         small = 0.0
 
         argsDict = cArgumentsDict.ArgumentsDict()
@@ -1062,6 +1070,7 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["h_dof_old"] = self.h_dof_old
         argsDict["hu_dof_old"] = self.hu_dof_old
         argsDict["hv_dof_old"] = self.hv_dof_old
+        argsDict["heta_dof_old"] = self.heta_dof_old
         argsDict["Cx"] = self.Cx
         argsDict["Cy"] = self.Cy
         argsDict["CTx"] = self.CTx
@@ -1074,6 +1083,9 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["hEps"] = self.hEps
         argsDict["global_entropy_residual"] = self.global_entropy_residual
         argsDict["dij_small"] = small
+        argsDict["delta_Sqd_h"] = self.delta_Sqd_h
+        argsDict["delta_Sqd_heta"] = self.delta_Sqd_heta
+        argsDict["delta_Sqd_kin"] = self.delta_Sqd_kin
 
         # compute entropy residual
         self.dsw_2d.calculateEV(argsDict)
@@ -1388,6 +1400,9 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         self.new_SourceTerm_hw = np.zeros(self.u[0].dof.shape, 'd')
         self.global_entropy_residual = np.zeros(self.u[0].dof.shape, 'd')
         self.dij_small = 0.0
+        self.delta_Sqd_h = np.zeros(self.u[0].dof.shape, 'd')
+        self.delta_Sqd_heta = np.zeros(self.u[0].dof.shape, 'd')
+        self.delta_Sqd_kin = np.zeros(self.u[0].dof.shape, 'd')
 
         # PARALLEL VECTORS #
         n=self.u[0].par_dof.dim_proc
@@ -1490,6 +1505,18 @@ class LevelModel(proteus.Transport.OneLevelTransport):
                                                 bs=1,
                                                 n=n,N=N,nghosts=nghosts,
                                                 subdomain2global=subdomain2global)
+        self.par_delta_Sqd_h = LAT.ParVec_petsc4py(self.delta_Sqd_h,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_delta_Sqd_heta = LAT.ParVec_petsc4py(self.delta_Sqd_heta,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
+        self.par_delta_Sqd_kin = LAT.ParVec_petsc4py(self.delta_Sqd_kin,
+                                                bs=1,
+                                                n=n,N=N,nghosts=nghosts,
+                                                subdomain2global=subdomain2global)
         self.par_normalx = LAT.ParVec_petsc4py(self.normalx,
                                                 bs=1,
                                                 n=n,N=N,nghosts=nghosts,
@@ -1566,6 +1593,10 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         # lets call calculate EV first and distribute
         self.computeEV()
         self.par_global_entropy_residual.scatter_forward_insert()
+        # for relaxation
+        self.par_delta_Sqd_h.scatter_forward_insert()
+        self.par_delta_Sqd_heta.scatter_forward_insert()
+        self.par_delta_Sqd_kin.scatter_forward_insert()
 
         argsDict = cArgumentsDict.ArgumentsDict()
         argsDict["mesh_trial_ref"] = self.u[0].femSpace.elementMaps.psi
@@ -1695,9 +1726,6 @@ class LevelModel(proteus.Transport.OneLevelTransport):
         argsDict["heta_min"] = self.heta_min
         argsDict["heta_max"] = self.heta_max
         argsDict["kin_max"] = self.kin_max
-        argsDict["size_of_domain"] = self.size_of_domain
-        argsDict["urelax"] = self.urelax
-        argsDict["drelax"] = self.drelax
 
         ## call calculate residual
         self.calculateResidual(argsDict)
