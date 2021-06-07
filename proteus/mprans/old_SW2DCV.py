@@ -15,6 +15,8 @@ from proteus.Transport import cfemIntegrals, globalMax, SparseMat
 from . import cArgumentsDict
 
 class NumericalFlux(proteus.NumericalFlux.ShallowWater_2D):
+    hasInterior = False
+
     def __init__(self, vt, getPointwiseBoundaryConditions,
                  getAdvectiveFluxBoundaryConditions,
                  getDiffusiveFluxBoundaryConditions,
@@ -27,6 +29,9 @@ class NumericalFlux(proteus.NumericalFlux.ShallowWater_2D):
                                                        getPeriodicBoundaryConditions,
                                                        h_eps,
                                                        tol_u)
+        self.penalty_constant = 2.0
+        self.includeBoundaryAdjoint = True
+        self.boundaryAdjoint_sigma = 1.0
         self.hasInterior = False
 
 
@@ -114,12 +119,12 @@ class RKEV(proteus.TimeIntegration.SSP):
         self.choose_dt()
         self.t = t0 + self.dt
 
-    # def setCoefficients(self):
-    #     """
-    #     beta are all 1's here
-    #     mwf not used right now
-    #     """
-    #     # Not needed for an implementation when alpha and beta are not used
+    def setCoefficients(self):
+        """
+        beta are all 1's here
+        mwf not used right now
+        """
+        # Not needed for an implementation when alpha and beta are not used
 
     def updateStage(self):
         """
@@ -265,9 +270,9 @@ class Coefficients(proteus.TransportCoefficients.TC_base):
         self.forceStrongConditions = forceStrongConditions
         self.constrainedDOFs = constrainedDOFs
         self.bathymetry = bathymetry
-        # self.useRBLES = useRBLES
-        # self.useMetrics = useMetrics
-        # self.sd = sd
+        self.useRBLES = useRBLES
+        self.useMetrics = useMetrics
+        self.sd = sd
         self.g = g
         self.nd = nd
         self.cE = cE
@@ -760,6 +765,21 @@ class LevelModel(proteus.Transport.OneLevelTransport):
                                                        options.periodicDirichletConditions)
         else:
             self.numericalFlux = None
+        # set penalty terms
+        # cek todo move into numerical flux initialization
+        if 'penalty' in self.ebq_global:
+            for ebN in range(self.mesh.nElementBoundaries_global):
+                for k in range(self.nElementBoundaryQuadraturePoints_elementBoundary):
+                    self.ebq_global['penalty'][ebN, k] = old_div(self.numericalFlux.penalty_constant,
+                        (self.mesh.elementBoundaryDiametersArray[ebN]**self.numericalFlux.penalty_power))
+        # penalty term
+        # cek move  to Numerical flux initialization
+        if 'penalty' in self.ebqe:
+            for ebNE in range(self.mesh.nExteriorElementBoundaries_global):
+                ebN = self.mesh.exteriorElementBoundariesArray[ebNE]
+                for k in range(self.nElementBoundaryQuadraturePoints_elementBoundary):
+                    self.ebqe['penalty'][ebNE, k] = old_div(self.numericalFlux.penalty_constant,
+                        self.mesh.elementBoundaryDiametersArray[ebN]**self.numericalFlux.penalty_power)
         logEvent(memory("numericalFlux", "OneLevelTransport"), level=4)
         self.elementEffectiveDiametersArray = self.mesh.elementInnerDiametersArray
         # use post processing tools to get conservative fluxes, None by default
